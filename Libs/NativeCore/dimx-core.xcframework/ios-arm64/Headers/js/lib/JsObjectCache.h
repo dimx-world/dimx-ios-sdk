@@ -8,14 +8,16 @@ class JsObjectCache
 {
 public:
     JsObjectCache(JsEnv* env);
+    void setLocation(JsLocation* loc) { mLocation = loc; }
 
-    qjs::Value add(JsLocation* loc, Object* object);
-    qjs::Value get(ObjectId id);
-    qjs::Value getByName(const std::string& name);
+    JsObject* get(Object* object);
+    JsObject* get(ObjectId id);
+    JsObject* get(const std::string& name);
     void remove(ObjectId id);
 
 private:
     JsEnv* mEnv{nullptr};
+    JsLocation* mLocation{nullptr};
     std::map<ObjectId, JsObject> mObjects;
     std::map<std::string, ObjectId> mNameToId;
 };

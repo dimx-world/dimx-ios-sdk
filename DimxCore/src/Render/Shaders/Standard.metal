@@ -322,7 +322,7 @@ fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
 {
     constexpr sampler linearSampler(address::repeat, filter::linear);
     constexpr sampler cubeSampler(address::clamp_to_edge, filter::linear, mip_filter::linear);
-    
+
     if (OcclusionPass) {
         // In OpenGL we can disable color write. But in Metal we just write a fully transparent pixel. The depth write goes as normal.
         return float4(0, 0, 0, 0);
@@ -331,7 +331,7 @@ fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
     if (ShadowsPass) {
         return float4(0, 0, 0, calcShadow(shadowMap, in.lightSpacePos, uniforms));
     }
-    
+
     float4 baseColor = uniforms.fBaseColor;
 
     if (VAColor) {
@@ -345,7 +345,7 @@ fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
     }
     
     if (uniforms.fFlat) {
-        return baseColor;
+        return (baseColor + uniforms.fAddColor) * uniforms.fMultColor;
     }
 
 /*

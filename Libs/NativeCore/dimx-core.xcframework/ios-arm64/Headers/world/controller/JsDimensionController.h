@@ -4,9 +4,9 @@
 #include <quickjspp.hpp>
 #include <Counter.h>
 #include <Input.h>
-#include <optional>
 
 class ResourceManager;
+class JsTimer;
 class JsDimension;
 class JsMath;
 class JsLogger;
@@ -15,6 +15,10 @@ class JsLocalStorage;
 class JsUI;
 class JsUtils;
 class JsCluster;
+class JsNetwork;
+class JsApp;
+class JsInput;
+class JsCamera;
 
 class JsDimensionController: public DimensionController
 {
@@ -39,28 +43,31 @@ public:
     void onAddLocation(Location* loc) override;
     void onRemoveLocation(Location* loc) override;
     void onFocusChanged(bool focused) override;
-    void onCustomParams(ObjectId location, const std::string& params) override;
+    void onIntent(const std::string& params) override;
 
     void onRemoteClientMesssage(const Config& msg) override;
 
-    JsCluster* getCluster(const std::string& name) const;
+    qjs::Value getQJSCluster(const std::string& name) const;
 
 private:
    void onInputEvent(const InputEvent& event);
    void initClusters();
+   void initCluster(const std::string& clusterFilePath);
+   void initDimxNamespace();
 
 private:
     std::unique_ptr<JsEnv> mJsEnv;
+    std::unique_ptr<JsTimer> mTimer;
     std::unique_ptr<JsDimension> mJsDimension;
-    std::unique_ptr<JsMath> mMath;
     std::unique_ptr<JsLogger> mLogger;
     std::unique_ptr<JsAccount> mAccount;
     std::unique_ptr<JsLocalStorage> mLocalStorage;
     std::unique_ptr<JsUtils> mUtils;
     std::unique_ptr<JsUI> mUI;
+    std::unique_ptr<JsNetwork> mNetwork;
+    std::unique_ptr<JsApp> mApp;
+    std::unique_ptr<JsInput> mInput;
+    std::unique_ptr<JsCamera> mCamera;
 
     std::map<std::string, ClusterInfo> mClusters;
-
-    bool mButton1Tracked{false};
-    std::optional<InputEvent> mCursorMoveEvent;
 };

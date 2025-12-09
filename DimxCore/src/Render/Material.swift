@@ -136,6 +136,9 @@ class Material
             baseColorMap = Renderer.instance.textures[Texture_nativeId(baseColTexPtr!)]
         }
         
+        Material_getParamVec4(coreMat, "add_color", &addColor)
+        Material_getParamVec4(coreMat, "mult_color", &multColor)
+
         let normalTexPtr = Material_getTexture(coreMat, "normal_map")
         if normalTexPtr != nil {
             normalMap = Renderer.instance.textures[Texture_nativeId(normalTexPtr!)]

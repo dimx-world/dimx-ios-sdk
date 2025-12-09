@@ -40,7 +40,7 @@ private:
     size_t mCurrentPos{0};
 };
 
-template <> OBufferStream& OBufferStream::operator<<(const std::string& val)
+template <> inline OBufferStream& OBufferStream::operator<<(const std::string& val)
 {
     *this << static_cast<uint32_t>(val.size());
     if (!val.empty()) {
@@ -49,7 +49,7 @@ template <> OBufferStream& OBufferStream::operator<<(const std::string& val)
     return *this;
 }
 
-template <> OBufferStream& OBufferStream::operator<<(const Buffer& val)
+template <> inline OBufferStream& OBufferStream::operator<<(const Buffer& val)
 {
     *this << static_cast<uint32_t>(val.size());
     if (!val.empty()) {
@@ -95,7 +95,7 @@ private:
     size_t mCurrentPos{0};
 };
 
-template <> IBufferStream& IBufferStream::operator>>(std::string& val)
+template <> inline IBufferStream& IBufferStream::operator>>(std::string& val)
 {
     uint32_t size{0};
     *this >> size;
@@ -112,7 +112,7 @@ template <> IBufferStream& IBufferStream::operator>>(std::string& val)
     return *this;
 }
 
-template <> IBufferStream& IBufferStream::operator>>(Buffer& val)
+template <> inline IBufferStream& IBufferStream::operator>>(Buffer& val)
 {
     uint32_t size{0};
     *this >> size;

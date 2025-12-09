@@ -25,7 +25,7 @@ void createModelObjects(ResourceManager& resourceManager,
                         ResourceLifeSpan lifeSpan,
                         ObjectsCallback callback);
 void createSceneObjects(ResourceManager& resourceManager,
-                       const Config& config,
+                       const std::vector<ConfigPtr>& configs,
                        ObjectsCallback callback);
 
 } // namespace ResUtils

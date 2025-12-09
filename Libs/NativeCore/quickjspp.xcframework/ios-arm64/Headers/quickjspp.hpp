@@ -780,7 +780,7 @@ public:
     {
         v = js_traits<std::decay_t<T>>::wrap(ctx, std::forward<T>(val));
         if(JS_IsException(v)) {
-            DIMX_QJS_THROW();
+            //DIMX_QJS_THROW();
         }
     }
 

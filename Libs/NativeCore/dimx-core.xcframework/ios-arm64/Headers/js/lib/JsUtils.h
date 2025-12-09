@@ -12,10 +12,13 @@ public:
     void openUrl(const std::string& url);
     std::string platformName();
 
+    bool validateResource(const std::string& type, const std::string& name);
+
     static void registerClass(qjs::Context::Module& module) {
-        module.class_<JsUtils>("JsUtils")
+        module.class_<JsUtils>("Utils")
+        .property<&JsUtils::platformName>("platformName")
         .fun<&JsUtils::openUrl>("openUrl")
-        .fun<&JsUtils::platformName>("platformName");
+        .fun<&JsUtils::validateResource>("validateResource");
     }
 
 private:

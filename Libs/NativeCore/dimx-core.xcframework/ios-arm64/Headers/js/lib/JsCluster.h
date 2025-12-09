@@ -28,9 +28,8 @@ public:
     static void registerClass(qjs::Context::Module& module) {
         module.class_<JsCluster>("Cluster")
             .constructor<qjs::Value>("Cluster")
-            .fun<&JsCluster::name>("name")
-            .fun<&JsCluster::basePath>("basePath")
-            .fun<&JsCluster::test>("test");
+            .property<&JsCluster::name>("name")
+            .property<&JsCluster::basePath>("basePath");
     }
 
 protected:

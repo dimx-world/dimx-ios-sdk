@@ -12,7 +12,7 @@ public:
     qjs::Value get(const std::string& key);
 
     static void registerClass(qjs::Context::Module& module) {
-        module.class_<JsLocalStorage>("JsLocalStorage")
+        module.class_<JsLocalStorage>("LocalStorage")
         .fun<&JsLocalStorage::get>("get")
         .fun<&JsLocalStorage::set>("set");
     }

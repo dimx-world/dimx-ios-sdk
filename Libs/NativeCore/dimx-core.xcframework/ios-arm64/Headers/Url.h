@@ -23,7 +23,7 @@ public:
     bool live() const { return mLive; }
     bool force() const { return mForce; }
     bool place() const { return mPlace; }
-    const std::string& custom() const { return mCustom; }
+    const std::string& intent() const { return mIntent; }
 
 private:
     bool parseStr(const std::string& str);
@@ -38,7 +38,7 @@ private:
     bool mLive{false};
     bool mForce{false};
     bool mPlace{false};
-    std::string mCustom;
+    std::string mIntent;
 };
 
 #endif // DIMX_CORE_URL_H

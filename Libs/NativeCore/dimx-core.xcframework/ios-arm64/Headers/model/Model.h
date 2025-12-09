@@ -2,8 +2,10 @@
 #include <ecs/Component.h>
 
 #include <EventPublisher.h>
+#include <anim/AnimationSource.h>
 #include <anim/Animation.h>
 #include <anim/Skeleton.h>
+#include <render/Material.h>
 #include <Counter.h>
 
 #include <vector>
@@ -41,12 +43,33 @@ public:
         Transform transform;
         std::shared_ptr<MeshInfo> mesh;
         int32_t meshId = -1;
+
+        Mesh* getMesh(const std::string& name);
+        Mesh* createMesh(const Config& meshConfig, bool pushFront = false);
     };
 
     struct FileItem {
         std::string name;
         MessageTag msg{MessageTag::None};
         std::vector<std::string> anims;
+    };
+
+    struct AnimationAlias {
+        std::string name;
+        std::string animation;
+        double begin{0.f};
+        double end{-1.f};
+    };
+
+    struct AnimatinoEvent {
+        std::string name;
+        std::string animation;
+        double time{0.f};
+    };
+
+    struct MaterialInfo {
+        ObjectId id;
+        ObjectPtr material;
     };
 
 public:
@@ -81,6 +104,9 @@ public:
     void addAnimFile(ObjectPtr fileObj);
     void deleteFile(const std::string& filename);
 
+    ObjectId addMaterial(std::string name, Config matConfig);
+    const std::map<std::string, MaterialInfo>& materials() const { return mMaterials; }
+
     const std::map<std::string, AnimationPtr>& animations() const;
     AnimationPtr findAnimation(const std::string& name);
 
@@ -104,14 +130,16 @@ protected:
     std::shared_ptr<edit::Property> createEditableProperty() override;
 
 private:
-    NodeInfo* createNewMeshNode(const std::string& name);
     void initFromBinary(const Config& config);
     void processBinaryNode();
-    void extractAnimations(const std::string& fileName, BinaryData& animBinData, bool remapNodes);
+    void extractAnimationSources(const std::string& fileName, BinaryData& animBinData, bool remapNodes);
+    void parseAnimations(const Config& animsConfig);
 
 private:
     std::unique_ptr<ModelBuilder> mBuilder;
+    std::map<std::string, MaterialInfo> mMaterials;
     std::vector<NodeInfo> mNodes;
+    std::map<std::string, AnimationSourcePtr> mAnimationSources;
     std::map<std::string, AnimationPtr> mAnimations;
     std::vector<SkeletonInfo> mSkeletons;
     std::vector<BinaryData::Node> mNodesMap;

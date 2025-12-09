@@ -15,7 +15,7 @@ public:
     void error(const std::string& msg);
 
     static void registerClass(qjs::Context::Module& module) {
-        module.class_<JsLogger>("JsLogger")
+        module.class_<JsLogger>("Logger")
         .fun<&JsLogger::debug>("debug")
         .fun<&JsLogger::info>("info")
         .fun<&JsLogger::info>("log")

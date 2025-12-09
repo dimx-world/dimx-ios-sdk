@@ -9,6 +9,9 @@ class JsVideoPlayer
 {
 public:
     JsVideoPlayer(JsEnv* env, VideoPlayer* player);
+    
+    const qjs::Value& jsValue() const { return mJsValue; }
+    const std::string& asset() const;
 
     void play();
     void pause();
@@ -18,6 +21,7 @@ public:
 
     static void registerClass(qjs::Context::Module& module) {
         module.class_<JsVideoPlayer>("JsVideoPlayer")
+        .property<&JsVideoPlayer::asset>("asset")
         .fun<&JsVideoPlayer::play>("play")
         .fun<&JsVideoPlayer::pause>("pause")
         .fun<&JsVideoPlayer::setCoverImage>("setCoverImage")
@@ -27,4 +31,5 @@ public:
 private:
     JsEnv* mEnv{nullptr};
     VideoPlayer* mPlayer{nullptr};
+    qjs::Value mJsValue;
 };

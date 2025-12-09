@@ -77,8 +77,12 @@ public:
 
     Vec3 transformPoint(const Vec3& pos) const;
     Vec3 invTransformPoint(const Vec3& pos) const;
+
     Vec3 transformVector(const Vec3& dir) const;
     Vec3 invTransformVector(const Vec3& dir) const;
+
+    Quat transformRotation(const Quat& rot) const;
+    Quat invertRotation(const Quat& rot) const;
 
     Vec3 axisX() const {
         const Mat4& mat = matrix();

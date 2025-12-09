@@ -175,7 +175,7 @@ void main()
 #if defined(VA_vTexCoord) && defined(MP_fBaseColorMap)
     vec4 texCol = texture(fBaseColorMap, fTexCoord);
     baseColor = texCol * (1.0 - fBaseColorFactor) + baseColor * fBaseColorFactor;
-    baseColor.a = texCol.a;
+    baseColor.a = texCol.a; // Correct font rendering
 #endif
 
     if (baseColor.a < 0.001) {
@@ -183,7 +183,7 @@ void main()
     }
 
     if (fFlat) {
-        outColor = baseColor;
+        outColor = (baseColor + fAddColor) * fMultColor;
         return;
     }
 

@@ -4,6 +4,7 @@
 #define DIMX_CORE_TRIGGER_H
 
 #include <ecs/Component.h>
+#include <js/JsFunction.h>
 
 #include <quickjspp.hpp>
 
@@ -22,8 +23,16 @@ public:
 
     void update(const FrameContext& frameContext);
 
-private:
-    qjs::Value getJsObject();
+    float radius() const { return mRadius; }
+    void setRadius(float value);
+    bool once() const { return mOnce; }
+    void setOnce(bool value) { mOnce = value; }
+
+    const JsFunction<void()>& onEnter() const { return mOnEnter; }
+    const JsFunction<void()>& onExit() const { return mOnExit; }
+
+    void setOnEnter(JsFunction<void()> callback) { mOnEnter = std::move(callback); }
+    void setOnExit(JsFunction<void()> callback) { mOnExit = std::move(callback); }
 
 private:
     JsEnv* mJsEnv{nullptr};
@@ -31,8 +40,9 @@ private:
     float mRadiusEnterSq{9.f};
     float mRadiusExitSq{9.f};
     bool mOnce{false};
-    std::function<void(qjs::Value)> mOnEnterCb;
-    std::function<void(qjs::Value)> mOnExitCb;
+
+    JsFunction<void()> mOnEnter;
+    JsFunction<void()> mOnExit;
 
     bool mUserInside{false};
 };

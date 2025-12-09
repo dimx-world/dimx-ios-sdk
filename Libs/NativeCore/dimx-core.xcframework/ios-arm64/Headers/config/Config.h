@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <any>
+#include <type_traits>
 
 DECL_ENUM(ConfigValueType,  Null,   Boolean,   Integer,   Real,   String,   DateTime,   Any,   Array,   Dict);
 DECL_ESTR(ConfigValueType, "Null", "Boolean", "Integer", "Real", "String", "DateTime", "Any", "Array", "Dict");
@@ -53,6 +54,17 @@ public:
     bool isArray()    const { return std::holds_alternative<Array>(mValue); }
     bool isDict()     const { return std::holds_alternative<Dict>(mValue); }
 
+    template <typename T>
+    bool isAny() const {
+        if (!std::holds_alternative<Any>(mValue)) {
+            return false;
+        }
+
+        using Requested = std::decay_t<T>;
+        const Any& value = std::get<Any>(mValue);
+        return std::any_cast<Requested>(&value) != nullptr;
+    }
+
     std::string toString() const;
 
     // Getters
@@ -64,7 +76,12 @@ public:
               typename std::enable_if<std::is_enum<T>::value>::type* = nullptr>
     T get() const { return str2enum<T>(getValue<String>()); }
 
-    template <typename T = std::string>
+    template <typename T = std::string,
+              typename std::enable_if<std::is_pointer<T>::value>::type* = nullptr>
+    T get(const std::string& key) const { return get<T>(key, nullptr); }
+
+    template <typename T = std::string,
+        typename std::enable_if<!std::is_pointer<T>::value>::type* = nullptr>
     T get(const std::string& key) const  { return getNode(key).get<T>(); }
 
     template <typename T>
@@ -92,6 +109,12 @@ public:
 
     Config& set(const std::string& key, const char* value) {
         return set(key, std::string(value));
+    }
+
+    const Config& operator[] (size_t index) const {
+        ASSERT(isArray(), "Config node is not an array.");
+        ASSERT(index < std::get<Array>(mValue).size(), "Array index out of bounds: " << index);
+        return std::get<Array>(mValue)[index];
     }
 
     //--------------------------------------------------------------------------

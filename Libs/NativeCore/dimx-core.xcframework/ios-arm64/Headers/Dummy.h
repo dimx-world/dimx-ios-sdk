@@ -18,8 +18,10 @@ public:
     
     void update(const FrameContext& frameContext);
 
-private:
+    float size() const { return mSize; }
     void setSize(float size);
+
+    bool analyticsEnabled() const { return mAnalytics; }
 
 private:
     float mSize{0.3f};

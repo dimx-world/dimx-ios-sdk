@@ -1,6 +1,7 @@
 #pragma once
 #include <Common.h>
 #include <Buffer.h>
+#include <chrono>
 #include <mutex>
 
 DECL_ENUM(SeekWhence,  Begin,   Current,   End)

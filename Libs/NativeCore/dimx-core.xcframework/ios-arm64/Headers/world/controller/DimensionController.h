@@ -21,7 +21,7 @@ public:
 
     bool backendEnabled() const { return mBackendEnabled; }
     
-    virtual void onCustomParams(ObjectId location, const std::string& params) {};
+    virtual void onIntent(const std::string& params) {};
 
 protected:
     void enableBackend() { mBackendEnabled = true; }

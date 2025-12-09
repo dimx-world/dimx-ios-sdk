@@ -3,7 +3,6 @@
 
 class AppUIManager;
 class AppPlacementScreen;
-class AppPicker;
 DECLARE_PTR(AppDimension);
 class AppDimension: public Dimension
 {

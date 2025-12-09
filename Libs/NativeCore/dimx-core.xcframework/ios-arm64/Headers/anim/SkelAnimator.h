@@ -14,14 +14,14 @@ public:
     SkelAnimator(Animator* animator, const Model::SkeletonInfo& skelInfo);
     Animator* animator() const;
 
-    void evaluate(double animTime);
+    void evaluate(double normalizedTime);
     const Mat4* modelJointTransforms() const;
-    void setAnimation(const AnimationPtr& anim);
+    void setAnimation(const AnimationSourcePtr& anim);
 
 private:
     Animator* mAnimator = nullptr;
     SkeletonPtr mSkeleton;
-    AnimationPtr mActiveAnimation;
+    AnimationSourcePtr mActiveAnimation;
 
     ozz::animation::SamplingCache mCache;
     ozz::Vector<ozz::math::SoaTransform>::Std mLocals;

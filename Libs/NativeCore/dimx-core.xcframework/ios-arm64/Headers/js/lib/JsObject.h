@@ -2,105 +2,91 @@
 #include <Common.h>
 #include <quickjspp.hpp>
 #include <LifeWatcher.h>
-#include "JsAgentManager.h"
-#include "JsAnimator.h"
-#include "JsUIScreen.h"
+#include "JsObjectComponentManager.h"
 #include "JsAudioPlayer.h"
 #include "JsVideoPlayer.h"
-#include "JsMaterial.h"
-#include "math/JsMath.h"
+#include "JsObjectTransform.h"
+#include "JsObjectMaterials.h"
+#include <EventSubscriber.h>
 
 class JsEnv;
 class Object;
 class JsLocation;
+class JsModel;
+class JsTimer;
 class JsObject: public LifeWatcher
 {
 public:
     JsObject(JsLocation* loc, Object* obj);
+    ~JsObject();
 
     Object* core() { return mObject; }
 
     bool alive() const;
     std::string id() const;
     const std::string& name() const;
-    bool isDummy() const;
-    bool visible() const;
-    void show() { setVisible(true); }
-    void hide() { setVisible(false); }
+
+    JsObject* getParent();
+    void setParent(qjs::Value parent);
+    std::vector<JsObject*> children();
+
+    void onUpdate(const FrameContext& frameContext);
+
+    bool isVisible() const;
     void setVisible(bool visible);
+
     void setScale(double value);
 
-    void link(JsObject* parent);
-    void unlink() { link(nullptr); }
+    qjs::Value jsComponents();
+    qjs::Value jsModel();
+    qjs::Value transform();
 
-    qjs::Value agents();
-    qjs::Value animator();
-    qjs::Value uiScreen();
-    qjs::Value audioPlayer();
-    qjs::Value videoPlayer();
-    qjs::Value material();
-    qjs::Value child(size_t idx);
+    qjs::Value getMaterials();
+    qjs::Value jsAnimator();
+
     qjs::Value location();
-
-    std::shared_ptr<JsTransform> localTransform();
-    void setLocalTransform(JsTransform* trans);
-
-    std::shared_ptr<JsVec3> localPosition();
-    void setLocalPosition(JsVec3* pos);
-
-    std::shared_ptr<JsTransform> worldTransform();
-    std::shared_ptr<JsVec3> worldPosition();
-    void setWorldPosition(JsVec3* pos);
-
-    void setLocalRotation(JsVec3* angles);
-
-    void subscribe(const std::string& event, qjs::Value callback);
+    qjs::Value timer();
+    qjs::Value input();
+    qjs::Value ui();
+    qjs::Value physics();
 
     static void registerClass(qjs::Context::Module& module) {
         module.class_<JsObject>("JsObject")
-        .fun<&JsObject::alive>("alive")
-        .fun<&JsObject::id>("id")
-        .fun<&JsObject::name>("name")
-        .fun<&JsObject::isDummy>("isDummy")
-        .fun<&JsObject::visible>("visible")
-        .fun<&JsObject::show>("show")
-        .fun<&JsObject::hide>("hide")
-        .fun<&JsObject::setVisible>("setVisible")
-        .fun<&JsObject::setScale>("setScale")
-        .fun<&JsObject::link>("link")
-        .fun<&JsObject::unlink>("unlink")
-        .fun<&JsObject::agents>("agents")
-        .fun<&JsObject::animator>("animator")
-        .fun<&JsObject::uiScreen>("uiScreen")
-        .fun<&JsObject::audioPlayer>("audioPlayer")
-        .fun<&JsObject::videoPlayer>("videoPlayer")
-        .fun<&JsObject::material>("material")
-        .fun<&JsObject::child>("child")
-        .fun<&JsObject::location>("location")
-        .fun<&JsObject::subscribe>("on")
-        .fun<&JsObject::localTransform>("localTransform")
-        .fun<&JsObject::setLocalTransform>("setLocalTransform")
-        .fun<&JsObject::localPosition>("localPosition")
-        .fun<&JsObject::setLocalPosition>("setLocalPosition")
-        .fun<&JsObject::worldTransform>("worldTransform")
-        .fun<&JsObject::worldPosition>("worldPosition")
-        .fun<&JsObject::setWorldPosition>("setWorldPosition")
-        .fun<&JsObject::setLocalRotation>("setLocalRotation");
+        .property<&JsObject::alive>("alive")
+        .property<&JsObject::id>("id")
+        .property<&JsObject::name>("name")
+        .property<&JsObject::getParent, &JsObject::setParent>("parent")
+        .property<&JsObject::children>("children")
+        .property<&JsObject::jsComponents>("components")
+        .property<&JsObject::isVisible, &JsObject::setVisible>("visible")
+        .property<&JsObject::transform>("transform")
+        .property<&JsObject::location>("location")
+        .property<&JsObject::getMaterials>("materials")
+        .property<&JsObject::jsAnimator>("animator")
+        .property<&JsObject::jsModel>("model")
+        .property<&JsObject::timer>("timer")
+        .property<&JsObject::input>("input")
+        .property<&JsObject::ui>("ui")
+        .property<&JsObject::physics>("physics");
+        //.property<&JsObject::getMaterials>("meshes")
+        //.property<&JsObject::getMaterials>("nodes")
     }
 
     void clearObject();
-    void resetChildren() { mChildren.clear(); }
+
+private:
+    JsObjectComponentManager& getComponentManager();
+    JsModel* getModel();
 
 private:
     JsLocation* mLocation{nullptr};
     JsEnv* mEnv{nullptr};
     Object* mObject{nullptr};
-    std::unique_ptr<JsAgentManager> mAgentManager;
-    std::unique_ptr<JsAnimator> mAnimator;
-    std::unique_ptr<JsUIScreen> mUIScreen;
-    std::unique_ptr<JsAudioPlayer> mAudioPlayer;
-    std::unique_ptr<JsVideoPlayer> mVideoPlayer;
-    std::vector<qjs::Value> mClickCbs;
-    std::unique_ptr<JsMaterial> mMaterial;
-    std::vector<std::unique_ptr<JsObject>> mChildren;
+    std::unique_ptr<JsModel> mModel;
+    std::unique_ptr<JsObjectComponentManager> mObjectComponentManager;
+    std::unique_ptr<JsObjectTransform> mTransform;
+    std::unique_ptr<JsObjectMaterials> mMaterials;
+    std::unique_ptr<JsTimer> mTimer;
+
+    EventSubscriber mSubscriber; // last
 };

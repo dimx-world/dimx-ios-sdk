@@ -1,12 +1,13 @@
 #pragma once
 #include <model/ModelBuilder.h>
 
-DECL_ENUM(PlaneAxis,  XY,   XZ)
+DECL_ENUM(PlaneAxis, XY, XZ)
 DECL_ESTR(PlaneAxis, "XY", "XZ")
 
-DECL_ENUM(PlaneOrigin,  Center)
+DECL_ENUM(PlaneOrigin, Center)
 DECL_ESTR(PlaneOrigin, "Center")
 
+class Mesh;
 class PlaneBuilder: public ModelBuilder
 {
 public:
@@ -20,12 +21,12 @@ public:
     void setWidth(float width, bool rebuild = true);
     void setHeight(float height, bool rebuild = true);
 
+    PlaneAxis planeAxis() const { return mPlaneAxis; }
+    void setPlaneAxis(PlaneAxis axis, bool rebuild = true);
 
 protected:
     std::shared_ptr<edit::Property> createEditableProperty() override;
-
-private:
-    void rebuildNative();
+    virtual void rebuildNative();
 
 private:
     float mWidth{1.f};
@@ -35,4 +36,6 @@ private:
 
     PlaneAxis mPlaneAxis{PlaneAxis::XY};
     PlaneOrigin mOrigin{PlaneOrigin::Center};
+
+    ObjectId mMaterialId;
 };

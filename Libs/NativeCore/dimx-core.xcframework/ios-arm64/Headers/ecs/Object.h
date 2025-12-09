@@ -83,19 +83,16 @@ public:
     }
 
     template <typename T> T& get() {
-        size_t classId = T::CompId;
-        if (!mTypedPointers.at(classId)) {
-            mTypedPointers[classId] = dynamic_cast<T*>(mComponents.at(classId).get());
-            ASSERT(mTypedPointers[classId], "Failed to dynamic cast component! entity [" << mName << "] comp [" << T::Tag << "] ptr [" << mComponents.at(classId).get() << "]");
-        }
-        return *reinterpret_cast<T*>(mTypedPointers[classId]);
+        T* ptr = tryGet<T>();
+        ASSERT(ptr, "Component not found! entity [" << mName << "] comp [" << T::Tag << "]");
+        return *ptr;
     }
 
     template <typename T> T* tryGet() {
         size_t classId = T::CompId;
-        if (!mTypedPointers.at(classId) && mComponents[classId]) {
+        if (mComponents[classId] && !mTypedPointers[classId]) {
             mTypedPointers[classId] = dynamic_cast<T*>(mComponents[classId].get());
-            ASSERT(mTypedPointers[classId], "Failed to dynamic cast component! entity [" << mName << "] comp [" << T::Tag << "]");
+            ASSERT(mTypedPointers[classId], "Failed to dynamic cast component! entity [" << mName << "] comp [" << T::Tag << "] ptr [" << mComponents.at(classId).get() << "]");
         }
         return reinterpret_cast<T*>(mTypedPointers[classId]);
     }

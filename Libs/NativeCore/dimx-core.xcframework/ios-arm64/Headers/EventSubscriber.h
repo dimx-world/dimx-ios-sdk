@@ -9,16 +9,12 @@
 class EventSubscriber
 {
 public:
-    EventSubscriber(void* owner)
-    : mOwner(owner)
-    {
-        ASSERT(mOwner, "Null owner");
-    }
+    EventSubscriber() = default;
 
     ~EventSubscriber() {
         for(const auto& wkPub: mPublishers) {
             if (auto shPub = wkPub.lock()) {
-                shPub->unsubscribe(mOwner);
+                shPub->unsubscribe(this);
             }
         }
     }
@@ -28,11 +24,10 @@ public:
         auto shPub = publisher.shared_from_this();
         ASSERT(shPub, "Invalid publisher");
         mPublishers.emplace_back(shPub);
-        publisher.template subscribe<Args...>(event, mOwner, std::move(func));
+        publisher.template subscribe<Args...>(event, this, std::move(func));
     }
 
 private:
-    void* mOwner{nullptr};
     std::vector<std::weak_ptr<BaseEventPublisher>> mPublishers;
 };
 

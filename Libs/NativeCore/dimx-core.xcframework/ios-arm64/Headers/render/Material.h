@@ -55,6 +55,11 @@ public:
 public:
     static bool isMaterialFile(const std::string& file);
     static ConfigPtr makeConfig(Config baseConfig, const std::string& filePath = {});
+    static const std::map<std::string, std::string>& userToInternalParamsMap();
+    static void convertUserToInternalConfig(const Config& userConfig, Config& outConfig);
+    static void populateConfigFromBinary(const BinaryData::Material& matInfo,
+                                         const std::string& baseDir,
+                                         Config& outConfig);
 
 public:
     Material(Object* entity, const Config& config);
@@ -64,15 +69,9 @@ public:
     void serialize(Config& out) override;
 
     Material* baseMaterial();
-    const std::string& modelMaterialName() const { return mModelMaterialName; }
 
     bool hasOverrides() const;
     const std::map<std::string, MaterialValue>& overrides() const { return mOverrides; }
-
-    static void populateConfigFromBinary(const BinaryData::Material& matInfo,
-                                         const Config& matOverride,
-                                         const std::string& baseDir,
-                                         Config& outConfig);
 
     NativeMaterial& native() const;
     void setNative(std::unique_ptr<NativeMaterial> native);
@@ -113,6 +112,9 @@ public:
     void setStencilRefValue(int value);
     void setStencilFunction(StencilFunction func);
 
+    const std::string& getTextureName(const std::string& paramName) const;
+    void setTextureName(const std::string& paramName, const std::string& textureName);
+
 protected:
     void propagateParamUpdate(const std::string& name, const MaterialValue& value, bool skipOverridesCheck);
 
@@ -120,11 +122,12 @@ private:
     void initWithBaseMaterial(ObjectPtr baseMat, CounterPtr counter);
     void rebuildNative(CounterPtr counter = {});
     const ParamInfo& getParamInfo(const std::string& name) const;
+    ObjectId resolveTextureName(const std::string& name, const std::string& paramName) const;
 
 private:
     ObjectPtr mBaseMaterial;
     bool mMadeFromFile{false};
-
+    std::string mBaseDir;
     std::optional<bool> mTransparent;
     
     std::map<std::string, ParamInfo> mParams;
@@ -146,6 +149,9 @@ private:
     ObjectId mModelMaterialId;
 
     std::optional<StencilInfo> mStencil;
+
+    std::vector<ObjectWeakPtr> mDerivedMaterials;
+    bool mPropagatingParamUpdates{false};
 };
 
 ////////////////////////////////////////////////////////////////////////////////

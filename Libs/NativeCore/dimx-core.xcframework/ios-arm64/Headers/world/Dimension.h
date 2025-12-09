@@ -91,7 +91,9 @@ protected:
 
 private:
     void trySetMinCoreVersion(int ver);
-    void onMouseClick(const Vec2& screenPos);
+    //void onMouseClick(const Vec2& screenPos);
+    void selectLocation(const LocationPtr& loc);
+    void cleanupLocation(ObjectId id);
 
 private:
     int mMinCoreVersion{0};
@@ -112,6 +114,8 @@ private:
     std::unique_ptr<ui::UIContext> mUiContext;
 
     std::vector<LocationPtr> mActiveLocations;
+    LocationPtr mInteractiveLocation;
+    LocationPtr mSelectedLocation;
 
     std::map<ObjectId, std::vector<LocationCallback>> mLocationsCallbacks;
 

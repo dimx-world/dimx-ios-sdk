@@ -1,408 +1,332 @@
-import {Utils} from 'dimx-cpp'
+import {app} from 'dimx-cpp'
 
 const Templates = []
 
-function getTransformFromConfig(record) {
+const BaseConfig = {
+    name: undefined,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: 1,
+    visible: true
+}
+
+function makeObjectConfig(parent, record) {
     return {
-        position: record.pos,
-        rotation_angles: record.rot,
-        scale: record.scale_xyz ? record.scale_xyz : `${record.scale} ${record.scale} ${record.scale}`
+        parent: parent.id,
+        name: record.name,
+        visible: record.visible,
+        transform: {
+            position: record.position,
+            rotation_angles: record.rotation,
+            scale: record.scale
+        }
     }
 }
 
-const FadeInActor = Object.freeze({
-    type: 'Material',
-    property: 'Alpha',
-    duration: 1,
-    track: {
-        values: [0, 1]
+function makeInputConfig(record) {
+    if (record.clickUrl) {
+        return {
+            onClick: () => app.openUrl(record.clickUrl)
+        }
     }
-})
 
-const DoubleSidedActor = Object.freeze({
-    type: 'FaceCamera',
-    fixed: true
-})
+    return undefined;
+}
 
-const FaceCameraActor = Object.freeze({
-    type: 'FaceCamera'
-})
+function makeFadeInConfig(record) {
+    if (record.fadeIn) {
+        return {
+            property: 'Alpha',
+            duration: 1,
+            track: {
+                values: [0, 1]
+            }
+        }
+    }
+    return undefined;
+}
+
+function makeFaceCameraConfig(record) {
+    if (record.faceCamera) {
+        return {
+            type: 'FaceCamera'
+        }
+    } else if (record.doubleSided) {
+        return {
+            type: 'FaceCamera',
+            fixed: true
+        }
+    }
+    return undefined;
+}
 
 Templates.push({
     name: 'dummy',
     config: {
-        name: null,
-        pos: "0 0 0",
-        rot: "0 0 0",
-        scale_xyz: null,
-        scale: 1,
-        visible: true,
+        ...BaseConfig,
         analytics: false
     },
     handler: (parent, record) => {
         let config = {
-            name: record.name,
-            Node: {
-                parent: parent.id(),
-                transform: getTransformFromConfig(record),
-                visible: record.visible
-            },
-            Dummy: {
-                analytics: record.analytics
+            ...makeObjectConfig(parent, record),
+            components: {
+                Dummy: { analytics: record.analytics }
             }
         }
-        parent.location().createObject(config)
+        parent.location.createObject(config)
     }
 })
 
 Templates.push({
     name: 'image',
     config: {
-        image: "default",
-        orient: "vert", // vert, horiz
+        ...BaseConfig,
+        asset: "default",
+        orientation: "Vertical", // Vertical, Horizontal
         width: 1,
         height: 1,
-        pos: "0 0 0",
-        rot: "0 0 0",
-        scale: 1,
         transparent: false,
-        fade_in: true,
-        flat: true,
-        double_sided: false,
-        face_camera: false,
-        url: null,
+        fadeIn: true,
+        receiveLighting: false,
+        doubleSided: false,
+        faceCamera: false,
+        clickUrl: undefined,
         _meta_: {
-            image: {
+            asset: {
                 resource: 'Texture'
             }
         }
     },
-    handler: (parent, record) => {
+    handler: async (parent, record) => {
         let config = {
-            Node: {
-                parent: parent.id(),
-                transform: getTransformFromConfig(record)
-            },
-            ModelNode: {
-                model: {
-                    builder: {
-                        type: "Plane",
-                        plane: record.orient === 'vert' ? 'XY' : 'XZ',
-                        width: record.width,
-                        height: record.height,
-                        origin: 'Center'
-                    }
+            ...makeObjectConfig(parent, record),
+            components: {
+                Image: {
+                    asset: record.asset,
+                    orientation: record.orientation,
+                    width: record.width,
+                    height: record.height,
+                    transparent: record.transparent,
+                    receiveLighting: record.receiveLighting,
                 },
-                materials: {
-                    ["1-0"]: {
-                        base: "Standard",
-                        transparent: record.transparent,
-                        overrides: {
-                            base_color_map: record.image,
-                            flat: record.flat
-                        }
-                    }
-                }
+                Input: makeInputConfig(record),
+                MaterialAnimator: makeFadeInConfig(record),
+                FaceCamera: makeFaceCameraConfig(record)
             }
         }
-
-        parent.location().createObject(config, function (object) {
-            if (record.url) {
-                object.on('Click', function () {
-                    Utils.openUrl(record.url)
-                })
-            }
-            if (record.fade_in) {
-                object.agents().add(FadeInActor);
-            }
-            if (record.face_camera) {
-                object.agents().add(FaceCameraActor);
-            } else {
-                if (record.double_sided) {
-                    object.agents().add(DoubleSidedActor);
-                }
-            }
-        })
+        parent.location.createObject(config);
     }
 })
 
 Templates.push({
     name: 'model',
     config: {
-        model: "box",
-        anim: null,
-        pos: "0 0 0",
-        rot: "0 0 0",
-        scale: 1,
-        scale_xyz: null,
+        ...BaseConfig,
+        asset: "box",
+        animation: undefined,
         transparent: false,
-        fade_in: true,
+        fadeIn: true,
+        clickUrl: undefined,
         _meta_: {
-            model: {
+            asset: {
                 resource: 'Model'
             }
         }
     },
-    handler: (parent, record) => {
+    handler: async (parent, record) => {
         let config = {
-            Node: {
-                parent: parent.id(),
-                transform: getTransformFromConfig(record)
-            },
-            ModelNode: {
-                model: record.model,
-                animator: record.anim ? { start_animation: record.anim } : undefined
+            ...makeObjectConfig(parent, record),
+            components: {
+                Model: {
+                    asset: record.asset,
+                    animator: record.animation
+                              ? { startAnimation: record.animation, loop: true }
+                              : undefined
+                },
+                Input: makeInputConfig(record),
+                MaterialAnimator: makeFadeInConfig(record),
+                FaceCamera: makeFaceCameraConfig(record)
             }
         }
 
-        if (record.transparent) {
-            config.ModelNode.materials = { ["1-0"]:  { transparent: true } }
-        }
+        //if (record.transparent) {
+        //    config.ModelNode.materials = { ["1-0"]:  { transparent: true } }
+        //}
 
-        parent.location().createObject(config, function (object) {
-            if (record.fade_in) {
-                object.agents().add(FadeInActor);
-            }
-        })
+        parent.location.createObject(config);
     }
 })
 
 Templates.push({
     name: 'audio',
     config: {
-        name: null,
-        audio: '',
-        cover_image: '',
-        cover_alpha: 1.0,
-        ui_always_on: false,
+        ...BaseConfig,
+        asset: '',
+        coverImage: '',
+        coverAlpha: 1.0,
+        uiAlwaysOn: false,
         style: "Circle", // Flat, Circle
-        progress_text: false,
+        progressText: false,
         width: 0.5,
         height: 0.5,
-        pos: "0 0 0",
-        rot: "0 0 0",
-        scale: 1,
         autoplay: false,
         loop: false,
-        sound_3d: false,
-        sound_ref_dist: 5,
-        sound_max_dist: 15,
-        fade_in: true,
-        double_sided: false,
-        face_camera: false,
+        sound3d: false,
+        soundRefDist: 5,
+        soundMaxDist: 15,
+        fadeIn: true,
+        doubleSided: false,
+        faceCamera: false,
         _meta_: {
-            audio: {
+            asset: {
                 resource: 'File'
             },
-            cover_image: {
+            coverImage: {
                 resource: 'Texture'
             }
         }
     },
-    handler: (parent, record) => {
+    handler: async (parent, record) => {
         let config = {
-            name: record.name ? record.name : undefined,
-            Node: {
-                parent: parent.id(),
-                transform: getTransformFromConfig(record)
-            },
-            AudioPlayer: {
-                filename: record.audio,
-                ui_always_on: record.ui_always_on,
-                style: record.style,
-                cover_image: record.cover_image,
-                cover_alpha: record.cover_alpha,
-                progress_text: record.progress_text,
-                width: record.width,
-                height: record.height,
-                autoplay: record.autoplay,
-                loop: record.loop,
-                sound_3d: record.sound_3d,
-                sound_ref_dist: record.sound_ref_dist,
-                sound_max_dist: record.sound_max_dist
+            ...makeObjectConfig(parent, record),
+            components: {
+                Audio: {
+                    asset: record.asset,
+                    uiAlwaysOn: record.uiAlwaysOn,
+                    style: record.style,
+                    coverImage: record.coverImage,
+                    coverAlpha: record.coverAlpha,
+                    progressText: record.progressText,
+                    width: record.width,
+                    height: record.height,
+                    autoplay: record.autoplay,
+                    loop: record.loop,
+                    sound3d: record.sound3d,
+                    soundRefDist: record.soundRefDist,
+                    soundMaxDist: record.soundMaxDist
+                },
+                MaterialAnimator: makeFadeInConfig(record),
+                FaceCamera: makeFaceCameraConfig(record)
             }
         }
 
-        let callback = undefined
-        if (record.fade_in || record.face_camera || record.double_sided) {
-            callback = (object) => {
-                if (record.fade_in) {
-                    object.agents().add(FadeInActor);
-                }
-                if (record.face_camera) {
-                    object.agents().add(FaceCameraActor);
-                } else {
-                    if (record.double_sided) {
-                        object.agents().add(DoubleSidedActor);
-                    }
-                }
-            }
-        }
-
-        parent.location().createObject(config, callback)
+        parent.location.createObject(config)
     }
 })
 
 Templates.push({
     name: 'video',
     config: {
-        name: null,
-        video: null,
+        ...BaseConfig,
+        asset: null,
         width: 1.28,
         height: 0.72,
-        pos: "0 0 0",
-        rot: "0 0 0",
-        scale: 1,
         autoplay: false,
         loop: false,
-        sound_3d: false,
-        sound_ref_dist: 5,
-        sound_max_dist: 15,
-        fade_in: true,
-        double_sided: false,
-        face_camera: false,
-        alpha_matte: false,
+        sound3d: false,
+        soundRefDist: 5,
+        soundMaxDist: 15,
+        fadeIn: true,
+        doubleSided: false,
+        faceCamera: false,
+        alphaMatte: false,
         _meta_: {
-            video: {
+            asset: {
                 resource: 'File'
             }
         }
     },
-    handler: (parent, record) => {
+    handler: async (parent, record) => {
         let config = {
-            name: record.name ? record.name : undefined,
-            Node: {
-                parent: parent.id(),
-                transform: getTransformFromConfig(record)
-            },
-            VideoPlayer: {
-                filename: record.video ? record.video : '',
-                width: record.width,
-                height: record.height,
-                autoplay: record.autoplay,
-                loop: record.loop,
-                sound_3d: record.sound_3d,
-                sound_ref_dist: record.sound_ref_dist,
-                sound_max_dist: record.sound_max_dist,
-                alpha_matte: record.alpha_matte
+            ...makeObjectConfig(parent, record),
+            components: {
+                Video: {
+                    asset: record.asset ? record.asset : '',
+                    width: record.width,
+                    height: record.height,
+                    autoplay: record.autoplay,
+                    loop: record.loop,
+                    sound3d: record.sound3d,
+                    soundRefDist: record.soundRefDist,
+                    soundMaxDist: record.soundMaxDist,
+                    alphaMatte: record.alphaMatte
+                },
+                MaterialAnimator: makeFadeInConfig(record),
+                FaceCamera: makeFaceCameraConfig(record)
             }
         }
-
-        let callback = undefined
-        if (record.fade_in || record.face_camera || record.double_sided) {
-            callback = (object) => {
-                if (record.fade_in) {
-                    object.agents().add(FadeInActor);
-                }
-                if (record.face_camera) {
-                    object.agents().add(FaceCameraActor);
-                } else {
-                    if (record.double_sided) {
-                        object.agents().add(DoubleSidedActor);
-                    }
-                }
-            }
-        }
-
-        parent.location().createObject(config, callback)
+        parent.location.createObject(config)
     }
 })
 
 Templates.push({
-    name: 'text2d',
+    name: 'text',
     config: {
+        ...BaseConfig,
         text: 'Text',
-        pos: "0 0 0",
-        rot: "0 0 0",
-        scale: 1,
+        fontSize: 20,
+        framePadding: 0,
+        frameWidth: 0,
+        frameHeight: 0,
+        borderSize: 0,
+        cornerRadius: 0,
 
-        font_size: 20,
-        frame_padding: 0,
-        frame_width: 0,
-        frame_height: 0,
-        border_size: 0,
-        corner_radius: 0,
+        color: '1 1 1 1',
+        backgroundColor: '0 0 0 0',
+        borderColor: '1 1 1 1',
 
-        text_color: '1 1 1 1',
-        background_color: '0 0 0 0',
-        border_color: '1 1 1 1',
-
-        fade_in: true,
-        flat: true,
-        double_sided: false,
-        face_camera: false
+        fadeIn: true,
+        receiveLighting: true,
+        doubleSided: false,
+        faceCamera: false
     },
-    handler: (parent, record) => {
+    handler: async (parent, record) => {
         let config = {
-            Node: {
-                parent: parent.id(),
-                transform: getTransformFromConfig(record)
-            },
-            ModelNode: {
-                model: {
-                    builder: {
-                        type: "Text2D",
-                        text: record.text,
-                        font_size: record.font_size,
-                        frame_padding: record.frame_padding,
-                        frame_width: record.frame_width,
-                        frame_height: record.frame_height,
-                        border_size: record.border_size,
-                        corner_radius: record.corner_radius,
-                        text_color: record.text_color,
-                        background_color: record.background_color,
-                        border_color: record.border_color,
-                        flat_material: record.flat
-                    }
-                }
+            ...makeObjectConfig(parent, record),
+            components: {
+                Text: {
+                    text: record.text,
+                    fontSize: record.fontSize,
+                    framePadding: record.framePadding,
+                    frameWidth: record.frameWidth,
+                    frameHeight: record.frameHeight,
+                    borderSize: record.borderSize,
+                    cornerRadius: record.cornerRadius,
+                    color: record.color,
+                    backgroundColor: record.backgroundColor,
+                    borderColor: record.borderColor,
+                    receiveLighting: record.receiveLighting
+                },
+                MaterialAnimator: makeFadeInConfig(record),
+                FaceCamera: makeFaceCameraConfig(record)
             }
         }
-
-        let callback = undefined
-        if (record.fade_in || record.double_sided || record.face_camera) {
-            callback = (object) => {
-                if (record.fade_in) {
-                    object.agents().add(FadeInActor);
-                }
-                if (record.face_camera) {
-                    object.agents().add(FaceCameraActor);
-                } else {
-                    if (record.double_sided) {
-                        object.agents().add(DoubleSidedActor);
-                    }
-                }
-            }
-        }
-
-        parent.location().createObject(config, callback)
+        parent.location.createObject(config)
     }
 })
 
 Templates.push({
     name: 'trigger',
     config: {
-        pos: "0 0 0",
+        ...BaseConfig,
         radius: 3,
         once: false,
-        on_enter: null,
-        on_exit: null
+        onEnter: null,
+        onExit: null
     },
     handler: (parent, record) => {
         let config = {
-            Node: {
-                parent: parent.id(),
-                transform: {
-                    position: record.pos
+            ...makeObjectConfig(parent, record),
+            components: {
+                Trigger: {
+                    radius: record.radius,
+                    once: record.once,
+                    onEnter: record.onEnter,
+                    onExit: record.onExit
                 }
-            },
-            Trigger: {
-                radius: record.radius,
-                once: record.once,
-                on_enter: record.on_enter,
-                on_exit: record.on_exit
             }
         }
-        parent.location().createObject(config)
+        parent.location.createObject(config)
     }
 })
 

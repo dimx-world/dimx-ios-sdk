@@ -8,6 +8,7 @@
 #include <config/Config.h>
 #include <physics/PhysicsScene.h>
 #include <Node.h>
+#include <Input.h>
 
 class ResourceManager;
 //class PhysicsScene;
@@ -48,6 +49,9 @@ public:
     const Lighting& lighting() const;
 
     void update(const Transform& rootTransform, const FrameContext& frameContext);
+    bool processInputEvent(const InputEvent& event);
+    void onAcquireInput();
+    void onReleaseInput();
 
     void addObject(const ObjectPtr& obj);
     void removeObject(const ObjectPtr& obj);
@@ -67,9 +71,12 @@ public:
     const std::string& skyboxName() const { return mSkyboxName; }
     const ObjectPtr& skybox() const { return mSkybox; }
 
+    void clearSelectedObject() { selectObject(nullptr); }
+
 private:
     void initSkybox(CounterPtr counter = {});
     std::string resolveSkyboxName() const;
+    void selectObject(const ObjectPtr& obj);
 
 private:
     ResourceManager* mResourceManager = nullptr;
@@ -78,6 +85,8 @@ private:
     std::vector<ObjectPtr> mObjects;
     std::map<ObjectId, ObjectPtr> mObjectsMap;
     std::unique_ptr<PhysicsScene> mPhysicsScene;
+    ObjectPtr mInteractiveObject;
+    ObjectPtr mSelectedObject;
 
     std::unique_ptr<Lighting> mLighting;
 

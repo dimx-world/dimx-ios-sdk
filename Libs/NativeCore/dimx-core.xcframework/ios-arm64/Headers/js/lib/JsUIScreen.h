@@ -10,19 +10,22 @@ class JsUIScreen
 public:
     JsUIScreen(ObjectId id, JsEnv* env, ui::Element* uiRoot);
 
+    const qjs::Value& jsValue() const { return mJsValue; }
+
     ObjectId id() { return mId; }
     std::string idStr() { return mId.toString(); }
     qjs::Value root();
 
     static void registerClass(qjs::Context::Module& module) {
         module.class_<JsUIScreen>("JsUIScreen")
-        .fun<&JsUIScreen::idStr>("id")
-        .fun<&JsUIScreen::root>("root");
+        .property<&JsUIScreen::idStr>("id")
+        .property<&JsUIScreen::root>("root");
     }
 
 private:
     ObjectId mId;
     JsEnv* mEnv{nullptr};
-//    qjs::Value mController;
     JsUiElement mRoot;
+
+    qjs::Value mJsValue;
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common.h>
-#include <anim/Animation.h>
+#include <anim/AnimationSource.h>
 
 class Animator;
 class MorphAnimator
@@ -16,16 +16,16 @@ public:
     MorphAnimator(Animator* animator);
     Animator* animator() const;
 
-    void evaluate(double animTime);
+    void evaluate(double normalizedTime);
 
     const std::vector<int32_t>& activeTargetIds(size_t nodeIndex) const;
     const std::vector<float>& activeTargetWeights(size_t nodeIndex) const;
 
-    void setAnimation(const AnimationPtr& anim);
+    void setAnimation(const AnimationSourcePtr& anim);
 
 private:
     Animator* mAnimator = nullptr;
-    AnimationPtr mActiveAnimation;
+    AnimationSourcePtr mActiveAnimation;
 
     std::vector<float> mFloatCache;
     std::vector<NodeState> mNodeStates;

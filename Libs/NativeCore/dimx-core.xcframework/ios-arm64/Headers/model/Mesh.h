@@ -46,7 +46,6 @@ public:
     void initialize(ResourceManager& resourceManager, CounterPtr counter);
 
     void resetGeometry();
-    void setMaterialConfig(Config config);
 
     NativeMesh& native() const;
     void setTransform(const Mat4& mat);

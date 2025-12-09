@@ -41,8 +41,7 @@ public:
 
     void update(const FrameContext& frameContext);
     bool processInputEvent(const InputEvent& event);
-
-    void processCustomParams(const std::string& params);
+    void setSelected(bool selected);
 
     void addObject(ObjectPtr object);
     void removeObject(ObjectPtr object);

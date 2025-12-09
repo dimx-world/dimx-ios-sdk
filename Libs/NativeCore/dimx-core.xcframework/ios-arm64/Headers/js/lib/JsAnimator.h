@@ -9,23 +9,36 @@ class JsAnimator
 public:
     JsAnimator(JsEnv* env, Animator* animator);
 
-    void play(const std::string& anim, bool looped);
-    void playWithCallback(const std::string& anim, qjs::Value callback);
+    const qjs::Value& jsValue() const { return mJsValue; }
+
+    bool getLooped() const;
+    void setLooped(bool looped);
+
+    double getSpeed() const;
+    void setSpeed(double speed);
+
+    std::vector<std::string> list() const;
+
+    void play(const std::string& anim, qjs::Value options);
     void stop();
     void reset();
-    void setSpeed(double speed);
+
+    void subscribe(qjs::Value arg1, qjs::Value arg2, qjs::Value arg3);
 
     static void registerClass(qjs::Context::Module& module) {
         module.class_<JsAnimator>("JsAnimator")
+        .property<&JsAnimator::setLooped, &JsAnimator::getLooped>("loop")
+        .property<&JsAnimator::setSpeed, &JsAnimator::getSpeed>("speed")
+        .fun<&JsAnimator::list>("list")
         .fun<&JsAnimator::play>("play")
-        .fun<&JsAnimator::playWithCallback>("playWithCallback")
         .fun<&JsAnimator::stop>("stop")
         .fun<&JsAnimator::reset>("reset")
-        .fun<&JsAnimator::setSpeed>("setSpeed");
+        .fun<&JsAnimator::subscribe>("on");
     }
 
 private:
     JsEnv* mEnv{nullptr};
+    qjs::Value mJsValue;
     Animator* mAnimator{nullptr};
     std::function<void()> mCallback;
 };

@@ -1,14 +1,25 @@
-import {Dimension} from 'dimx-cpp'
+import * as dimxCpp from 'dimx-cpp'
 import {Templates} from './ContentTemplates'
 
 export class ContentFactory {
     templates = {}
     content = {}
+    clusters = {}
 
     constructor() {
         for (const tmpl of Templates) {
-            this.addTemplate(tmpl.name, tmpl.config, tmpl.handler)
+            this.registerTemplate(tmpl.name, tmpl.config, tmpl.handler)
         }
+    }
+
+    getCluster(name) {
+        if (!(name in this.clusters)) {
+            this.clusters[name] = dimxCpp.getCluster(name);
+            if (!this.clusters[name]) {
+                throw new Error(`ContentFactory: Unknown cluster [${name}]`)
+            }
+        }
+        return this.clusters[name]
     }
 
     expandTemplate(record, visited) {
@@ -43,7 +54,7 @@ export class ContentFactory {
         return {...baseTmpl, ...record}
     }
 
-    addTemplate(name, template, handler) {
+    registerTemplate(name, template, handler) {
         if (!name || !template /*|| !handler*/) {
             console.error(`Null template [${name}]. Ignoring`)
             return;
@@ -65,7 +76,7 @@ export class ContentFactory {
         this.templates[name] = expandedRec;
     }
 
-    addContent(cluster, content) {
+    addContent(content, options) {
         if (!content || !Array.isArray(content)) {
             console.error(`Invalid content being added [${JSON.stringify(content)}]`)
             return
@@ -76,7 +87,8 @@ export class ContentFactory {
             if (!(recordKey in this.content)) {
                 this.content[recordKey] = []
             }
-            record._cluster_ = cluster
+            record._cluster_name_ = options.clusterName
+            record._cluster_path_ = options.clusterPath
             this.content[recordKey].push(record)
         }
     }
@@ -89,7 +101,7 @@ export class ContentFactory {
 
         for (const key of Object.keys(record)) {
             if (key[0] != '_' && key != 'T' && !(key in tmpl)) {
-                console.error(`Invalid content item [${JSON.stringify(record)}]`)
+                console.error(`Invalid key [${key}] in content item [${JSON.stringify(record)}]`)
                 return null
             }
         }
@@ -105,14 +117,21 @@ export class ContentFactory {
                     continue
                 }
 
-                if (!expanded?._cluster_?.basePath) {
+                let basePath = expanded._cluster_path_;
+
+                if (!basePath) {
+                    const cluster = this.getCluster(expanded._cluster_name_);
+                    basePath = cluster?.basePath();
+                }
+
+                if (!basePath) {
                     continue
                 }
 
-                const pathInCluster = `${expanded._cluster_.basePath()}/${value}`;
-                if (Dimension.validateResource(info.resource, pathInCluster)) {
+                const pathInCluster = `${basePath}/${value}`;
+                if (dimxCpp.utils.validateResource(info.resource, pathInCluster)) {
                     expanded[key] = pathInCluster
-                } else if (!Dimension.validateResource(info.resource, value)) {
+                } else if (!dimxCpp.utils.validateResource(info.resource, value)) {
                     console.error(`Unable to locate content resource [${info.resource}] [${value}]`)
                     return null
                 }
@@ -120,24 +139,25 @@ export class ContentFactory {
         }
 
         delete expanded._meta_;
-        delete expanded._cluster_;
+        delete expanded._cluster_name_;
+        delete expanded._cluster_path_;
         return expanded
     }
 
     createContent(object) {
-        let array = this.content[object.name()]
+        let array = this.content[object.name]
         if (!array) {
             return
         }
         for (let record of array) {
             const tmpl = this.templates[record.T]
             if (!tmpl) {
-                console.warn(`Unknown template [${record.T}] for object [${object.name()}]`)
+                console.warn(`Unknown template [${record.T}] for object [${object.name}]`)
                 continue
             }
 
             if (!tmpl._handler_) {
-                console.warn(`Unknown content handler [${tmpl.T}] for object [${object.name()}]`)
+                console.warn(`Unknown content handler [${tmpl.T}] for object [${object.name}]`)
                 continue
             }
 

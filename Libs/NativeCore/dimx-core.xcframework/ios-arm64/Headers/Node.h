@@ -7,8 +7,8 @@
 #include <Transform.h>
 #include <EventPublisher.h>
 
-DECL_ENUM(NodeEvent,  Click);
-DECL_ESTR(NodeEvent, "Click");
+DECL_ENUM(NodeEvent,  Update);
+DECL_ESTR(NodeEvent, "Update");
 
 class Scene;
 class PhysicsActor;
@@ -47,10 +47,16 @@ public:
     void setLocalScale(const Vec3& scale);
 
     const Transform& worldTransform() const { return mWorldTrans; }
+    void setWorldTransform(const Transform& transform);
+
     const Vec3& worldPosition() const { return mWorldTrans.position(); }
     void setWorldPosition(const Vec3& pos);
+
     const Quat& worldRotation() const { return mWorldTrans.rotation(); }
+    void setWorldRotation(const Quat& quat);
+    
     const Vec3& worldScale() const { return mWorldTrans.scale(); }
+    void setWorldScale(const Vec3& scale);
 
     void setApplyParentTransform(bool value) { mApplyParentTransform = value; }
 
@@ -70,14 +76,12 @@ public:
 
     void disableScale() { mScaleDisabled = true; }
 
-    bool clickable() const;
-    void onClick();
-
     void collectDeleteSet(std::set<ObjectId>& set) override;
 
     float raycast(const Ray& worldRay) const;
 
     float collisionRadius() const { return mCollisionRadius; }
+    void setCollisionRadius(float radius) { mCollisionRadius = radius; }
 
 private:
     unsigned int mParentLinkFlags = 0;
@@ -100,7 +104,6 @@ private:
     std::unique_ptr<PhysicsActor> mPhysicsActor;
 
     AABB mAABB;
-    bool mClickable{false};
 
     bool mScaleDisabled{false};
     float mCollisionRadius{-1.f};

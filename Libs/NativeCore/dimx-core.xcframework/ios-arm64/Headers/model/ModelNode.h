@@ -16,6 +16,12 @@ class ModelNode: public Component
 {
     DECLARE_COMPONENT(ModelNode)
 
+    struct MaterialInfo {
+        ObjectId id;
+        ObjectPtr material;
+    };
+
+
 public:
     ModelNode(Object* entity, const Config& config);
     ~ModelNode();
@@ -25,6 +31,8 @@ public:
     void collectDeleteSet(std::set<ObjectId>& set) override;
     void update(const FrameContext& frameContext);
 
+    const std::map<std::string, MaterialInfo>& materials() const { return mMaterials; }
+
     void setHighlightFactor(float factor);
 
     void setMaterialValue(const std::string& name, const MaterialValue& val);
@@ -32,6 +40,7 @@ public:
     const std::vector<ObjectPtr>& modelNodes() const { return mNodes; }
     Animator* animator() { return mAnimator.get(); }
     Model& model();
+    const std::string& originalModelName() const { return mOrigModelName; }
 
 private:
     void copyBuilderModel(const Config& config, std::function<void(const ObjectPtr&)> callback);
@@ -65,6 +74,7 @@ private:
     ObjectPtr mModel;
 
     std::vector<ObjectPtr> mNodes;
+    std::map<std::string, MaterialInfo> mMaterials;
     std::unique_ptr<Animator> mAnimator;
 
     Config mRenderConfig;

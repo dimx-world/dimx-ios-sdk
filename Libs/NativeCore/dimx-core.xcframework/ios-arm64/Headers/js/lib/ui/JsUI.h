@@ -20,7 +20,7 @@ public:
     void notify(const std::string& level, const std::string& message);
 
     static void registerClass(qjs::Context::Module& module) {
-        module.class_<JsUI>("JsUI")
+        module.class_<JsUI>("UI")
             .fun<&JsUI::createScreen>("createScreen")
             .fun<&JsUI::showActiveScreen>("showActiveScreen")
             .fun<&JsUI::hideActiveScreen>("hideActiveScreen")
