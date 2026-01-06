@@ -30,7 +30,6 @@ protected:
     virtual void onExit() {}
     virtual void onAddLocation(Location* loc) {}
     virtual void onRemoveLocation(Location* loc) {}
-    virtual void onFocusChanged(bool focused) {}
 
 private:
     void onEnterInternal();

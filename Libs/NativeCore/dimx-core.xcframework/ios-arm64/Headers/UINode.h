@@ -18,7 +18,7 @@ class UINode: public Component
     DECLARE_COMPONENT(UINode)
     static constexpr float WORLD_TO_PIX = 1000.f;
     static constexpr float PX_TO_WORLD = 1.f / WORLD_TO_PIX;
-    static constexpr size_t MAX_RENDER_TARGET_SIZE = 2048;
+    static constexpr int MAX_RENDER_TARGET_SIZE = 4096;
     static constexpr float DEFAULT_FONT_SIZE = 48.f;
 
 public:

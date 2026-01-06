@@ -171,15 +171,22 @@
     "imgui": {
         "fonts": {
             "default": {
-                "name": "arial",
+                "name": "inter",
+                "weight": "Regular",
                 "?size": [
                     { "condition": { "type": "platform", "value": "Mobile"}, "value": 48 },
-                    { "condition": "", "value": 14 }
-                ],
+                    { "condition": "", "value": 16 }
+                ]
             },
             "files" : {
-                "arial": "fonts/arial.ttf"
-            }
+                //"inter": "fonts/inter_regular.ttf"
+                "inter": "fonts/inter_medium.ttf"
+            },
+            "load": [
+                { "name": "inter", "weight": "Regular", "file": "fonts/inter_medium.ttf" },
+                { "name": "inter", "weight": "Bold", "file": "fonts/inter_bold.ttf" },
+                { "name": "inter", "weight": "Black", "file": "fonts/inter_black.ttf" }
+            ]
         },
         "render_mesh": {
             "type": "holder",
@@ -190,7 +197,7 @@
             "index_type": "UInt16",
             "num_inds": 10000, // initial size
             "material": { "base": "ImGui" }
-        },
+        }
     },
 
     "materials": {

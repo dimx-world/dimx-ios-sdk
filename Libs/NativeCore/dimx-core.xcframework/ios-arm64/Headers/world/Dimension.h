@@ -12,8 +12,8 @@
 
 #include <memory>
 
-DECL_ENUM(DimensionEvent,  Enter,   Exit,   AddLocation,   RemoveLocation,   FocusChanged,   InputEvent);
-DECL_ESTR(DimensionEvent, "Enter", "Exit", "AddLocation", "RemoveLocation", "FocusChanged", "InputEvent");
+DECL_ENUM(DimensionEvent,  Enter,   Exit,   AddLocation,   RemoveLocation,   InputEvent);
+DECL_ESTR(DimensionEvent, "Enter", "Exit", "AddLocation", "RemoveLocation", "InputEvent");
 
 constexpr uint64_t LOCATION_ENTER_FORCE = 1 << 0;
 constexpr uint64_t LOCATION_ENTER_PLACE = 1 << 1;
@@ -63,9 +63,6 @@ public:
     const std::vector<LocationPtr>& locations() const;
     const LocationPtr& findLocation(ObjectId id) const;
 
-    virtual void setFocus(bool active);
-    bool focused() const;
-
     void deleteLocation(ObjectId id);
 
     const ObjectPtr& entity() const;
@@ -97,7 +94,6 @@ private:
 
 private:
     int mMinCoreVersion{0};
-    bool mFocused{false};
     bool mUserDimensionFlag{true};
 
     ObjectId mId;

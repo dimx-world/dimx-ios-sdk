@@ -42,7 +42,6 @@ public:
     void onExit() override;
     void onAddLocation(Location* loc) override;
     void onRemoveLocation(Location* loc) override;
-    void onFocusChanged(bool focused) override;
     void onIntent(const std::string& params) override;
 
     void onRemoteClientMesssage(const Config& msg) override;

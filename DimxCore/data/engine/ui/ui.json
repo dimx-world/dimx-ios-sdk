@@ -1,4 +1,3 @@
 {
-    "scheme": "@ui/scheme.json",
-    "dimension_default_screen": "@ui/dimension_default_screen.json"
+    "scheme": "@ui/scheme.json"
 }

@@ -24,7 +24,6 @@ public:
     std::string id() const { return mDimension->id().toString(); }
     const std::string& name() const { return mDimension->name(); }
     JsEnv* jsEnv() const { return mEnv; }
-    void unfocus() { mDimension->setFocus(false); }
 
     void onUpdate(const FrameContext& frameContext);
     void onEnter();

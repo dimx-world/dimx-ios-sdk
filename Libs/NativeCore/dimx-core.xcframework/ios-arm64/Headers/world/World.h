@@ -54,8 +54,6 @@ public:
     void onLocationDetected(ObjectId dimId, ObjectId locId);
     void reloadAccountDimensions();
 
-    void setDimensionFocused(ObjectId id);
-
     std::string getAnchorsTrackingStatus(ObjectId dimId);
 
     bool isUserDimension(ObjectId id) const;
@@ -82,8 +80,6 @@ private:
     std::vector<InputEvent> mCachedInputEvents;
 
     std::map<ObjectId, std::set<ObjectId>> mDetectedLocations;
-
-    ObjectId mFocusedDimensionId;
 
     double mNextCleanupDistantLocationsTime{0.0};
 

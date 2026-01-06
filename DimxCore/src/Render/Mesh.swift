@@ -67,6 +67,10 @@ class Mesh
             reloadMeshGeometry()
         }
         
+        if numVerts == 0 {
+            return;
+        }
+
         encoder.setVertexBuffer(vertexBuffer, offset: 0, index: VertexBufferIndex.VBIVertexBuffer.rawValue)
         if morphIndsBuffer != nil {
             encoder.setVertexBuffer(morphIndsBuffer!, offset: 0, index: VertexBufferIndex.VBIMorphInds.rawValue)
@@ -93,6 +97,10 @@ class Mesh
     
     func reloadMeshGeometry() {
         numVerts = Mesh_numVerts(coreMesh)
+        if numVerts == 0 {
+            return;
+        }
+            
         let vertSize = Mesh_vertexSize(coreMesh)
 
         var vertexData = [Int8](repeating: 0, count: vertSize * numVerts)

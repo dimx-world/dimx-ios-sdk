@@ -29,6 +29,7 @@ public:
     void pushContext(ImGuiContextWrapper* context);
     void popContext();
     ImGuiContextWrapper* currentCtx() { return mContextStack.back(); }
+    ImGuiContextWrapper* defaultCtx() { return mContexts.empty() ? nullptr : mContexts[0].get(); }
 
     FontManager& fonts() { return mFontManager; }
 

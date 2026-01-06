@@ -70,6 +70,8 @@ public:
     virtual void setText(const std::string& text) { mText = text; }
 
     const Font* font() const { return mFont; }
+    FontWeight fontWeight() const { return mFontWeight; }
+    void setFontWeight(FontWeight weight) { mFontWeight = weight; }
     float fontSize() const { return mFontSize; }
     void setFontSize(float size) { mFontSize = size; }
 
@@ -128,6 +130,7 @@ public:
 
 protected:
     Rect calcTexRect(const Rect& texRect, const Vec2& texSize);
+    void setFont(const Font* font) { mFont = font; }
 
 private:
     UIType mUIType = UIType::None;
@@ -139,6 +142,7 @@ private:
     std::string mText;
 
     std::string mFontName;
+    FontWeight mFontWeight{FontWeight::Regular};
     float mFontSize{-1};
     const Font* mFont{nullptr};
 
