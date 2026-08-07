@@ -57,3 +57,4 @@ previous frameworks, use *File > Packages > Reset Package Caches*.
 Error: `the path does not point to a valid library: .../libdimx-core.a` - delete
 the `CONFIGURATION_BUILD_DIR` parameter in the build settings. It should be used
 from the project, not from a specific target.
+
