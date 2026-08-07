@@ -4,7 +4,7 @@
 import Foundation
 import PackageDescription
 
-let coreVersion = "0.0.2"
+let coreVersion = "0.0.3"
 
 let package = Package(
     name: "DimxWorld",
