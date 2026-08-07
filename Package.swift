@@ -4,7 +4,7 @@
 import Foundation
 import PackageDescription
 
-let coreVersion = "0.0.1"
+let coreVersion = "0.0.2"
 
 let package = Package(
     name: "DimxWorld",
@@ -43,7 +43,6 @@ let package = Package(
             name: "DimxNative",
             dependencies: [
                 "dimx-core",
-                "dimx-core-headers",
                 "dimx-vision",
                 "dimx-net",
                 "dxaudio",
@@ -77,15 +76,13 @@ let package = Package(
             ]
         ),
 /*
-        .binaryTarget(name: "dimx-core", path: "Libs/NativeCore/dimx-core.xcframework"),
-        .binaryTarget(name: "dimx-core-headers", path: "Libs/NativeCore/dimx-core-headers.xcframework"),
-        .binaryTarget(name: "dimx-net", path: "Libs/NativeCore/dimx-net.xcframework"),
-        .binaryTarget(name: "dimx-vision", path: "Libs/NativeCore/dimx-vision.xcframework"),
-        .binaryTarget(name: "dxaudio", path: "Libs/NativeCore/dxaudio.xcframework"),
-        .binaryTarget(name: "dxvideo", path: "Libs/NativeCore/dxvideo.xcframework"),
+        .binaryTarget(name: "dimx-core", path: "Libs/dimx-core.xcframework"),
+        .binaryTarget(name: "dimx-net", path: "Libs/dimx-net.xcframework"),
+        .binaryTarget(name: "dimx-vision", path: "Libs/dimx-vision.xcframework"),
+        .binaryTarget(name: "dxaudio", path: "Libs/dxaudio.xcframework"),
+        .binaryTarget(name: "dxvideo", path: "Libs/dxvideo.xcframework"),
 */
         .binaryTarget(name: "dimx-core", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-core.xcframework.zip", checksum: "016cc756ffe8eb07a6d5fca4ef146efc62b39ef18340c5fab42aa9ad917e0ad1"),
-        .binaryTarget(name: "dimx-core-headers", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-core-headers.xcframework.zip", checksum: "12b0b6b41d51e8d4bd33b33344bfa3fcf1a6b843a0a05e2243027519842ca5c7"),
         .binaryTarget(name: "dimx-net", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-net.xcframework.zip", checksum: "62cace9643bdb33932e94b65d8a3bb96a3a00447718550bb1cc532e97299aed2"),
         .binaryTarget(name: "dimx-vision", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-vision.xcframework.zip", checksum: "5f92f2255e65fe54cd7ae29abf461decfdd703f43511c8523949754e276c0738"),
         .binaryTarget(name: "dxaudio", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dxaudio.xcframework.zip", checksum: "99bcf0886ec9c90c9f7f249dcf5eff419f21c67df3481d9cc00e0cfa98505bcb"),
