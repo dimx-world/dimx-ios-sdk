@@ -1,0 +1,58 @@
+{
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "mobile-right-panel",
+    "type": "Window",
+    "panel": true,
+    "classNames": [ "no-frame" ],
+    "style": {
+        "marginLeft": "auto",
+        "marginRight": 0,
+        "marginTop": "auto",
+        "marginBottom": "auto",
+        "width": 200,
+        "height": 700,
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "space-between",
+        "paddingTop": 20,
+        "paddingBottom": 20
+    },
+    "styleSheet": {
+        "Button": {
+            "backgroundColor": [0, 0, 0, 0],
+            "borderStyle": "none",
+            "width": 150,
+            "height": 150
+        }
+    },
+    "children": [
+        {
+            "name": "anchors-btn",
+            "type": "Button",
+            "style": {
+                "backgroundImage": "editor-mobile-ui",
+                "backgroundImageRect": [400, 200, 100, 100]
+            }
+        },
+        {
+            "name": "select-btn",
+            "type": "Button",
+            "style": {
+                "backgroundImage": "editor-mobile-ui",
+                "backgroundImageRect": [0, 0, 100, 100]
+            }
+        },
+        {
+            "name": "create-btn",
+            "type": "Button",
+            "style": {
+                "backgroundImage": "editor-mobile-ui",
+                "backgroundImageRect": [400, 300, 100, 100]
+            }
+        }
+    ]
+}

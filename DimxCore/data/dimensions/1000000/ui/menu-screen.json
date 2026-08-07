@@ -1,0 +1,61 @@
+{
+    "name": "menu-screen",
+    "type": "Window",
+    "visible": false,
+    "modal": true,
+    "styleSheet": {
+        "menu-button": {
+            "width": "100%",
+            "height": 50,
+            "margin": 5
+        }
+    },
+    "style": {
+        "margin": "auto",
+        "padding": 30,
+        "width": 400,
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "borderStyle": "none"
+    },
+    "children": [
+        {
+            "name": "login-btn",
+            "type": "Button",
+            "text": "Login",
+            "classNames": [ "menu-button" ]
+        },
+        {
+            "name": "account-btn",
+            "type": "Button",
+            "text": "Account: <user-email>",
+            "classNames": [ "menu-button" ]
+        },
+        {
+            "name": "dimensions-btn",
+            "type": "Button",
+            "text": "Dimensions",
+            "classNames": [ "menu-button" ]
+        },
+        {
+            "name": "settings-btn",
+            "type": "Button",
+            "text": "Settings",
+            "classNames": [ "menu-button" ]
+        },
+        {
+            "name": "editor-btn",
+            "type": "Button",
+            "text": "Editor",
+            "classNames": [ "menu-button" ]
+
+        },
+        {
+            "name": "logger-btn",
+            "type": "Button",
+            "text": "Logger",
+            "classNames": [ "menu-button" ]
+        }
+    ]
+}

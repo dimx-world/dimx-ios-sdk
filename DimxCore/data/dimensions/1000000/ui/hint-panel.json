@@ -1,0 +1,52 @@
+{
+    "name": "hint-panel",
+    "type": "Window",
+    "panel": true,
+    "visible": false,
+    "style": {
+        "left": 0,
+        "right": 0,
+        "bottom": 160,
+        "padding": 20,
+        "flexDirection": "row",
+        "alignItems": "center",
+        "gap": 20,
+        "flexShrink": 0
+    },
+    "children": [
+        {
+            "name": "container",
+            "style": {
+                "flexGrow": 1,
+                "flexDirection": "row",
+                "gap": 40,
+                "overflow": "hidden"
+            },
+            "custom": {
+                "itemTemplate": {
+                    "name": "hint",
+                    "type": "Image",
+                    "style": {
+                        "width": 400,
+                        "height": 250,
+                        "flexShrink": 0,
+                        "borderStyle": "solid",
+                        "borderColor": [1, 1, 1, 1],
+                        "borderWidth": 4,
+                        "borderRadius": 30
+                    }
+                }
+            }
+        },
+        {
+            "name": "hand-scan-img",
+            "type": "Image",
+            "style": {
+                "width": 250,
+                "height": 250,
+                "flexShrink": 0,
+                "backgroundImage": "textures/hand-scan-small.gif"
+            }
+        }
+    ]
+}

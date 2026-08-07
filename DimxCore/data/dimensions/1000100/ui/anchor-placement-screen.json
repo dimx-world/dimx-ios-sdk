@@ -1,0 +1,65 @@
+ {
+    "name": "anchor-placement-screen",
+    "type": "Window",
+    "visible": false,
+    "style": {
+        "margin": "auto",
+        "width": 900,
+        "height": 1200,
+        "flexDirection": "column",
+        "padding": 10,
+        "backgroundColor": [0, 0, 0, 0]
+    },
+    "children": [
+        {
+            "name": "data-level-text",
+            "type": "Text",
+            "style": {
+                "width": "100%",
+                "height": 100
+            },
+            "text": "Creation data level"
+        },
+        {
+            "name": "message-text",
+            "type": "Text",
+            "style": {
+                "width": "100%",
+                "height": 100
+            },
+            "text": "message"
+        },
+
+        {
+            "name": "button-container",
+            "style": {
+                "width": "100%",
+                "flexDirection": "row",
+                "gap": 5,
+                "marginTop": "auto",
+                "justifyContent": "space-between"
+            },
+            "children": [
+                {
+                    "name": "place-btn",
+                    "type": "Button",
+                    "enabled": false,
+                    "style": {
+                        "width": 360,
+                        "height": 120
+                    },
+                    "text": "Place"
+                },
+                {
+                    "name": "cancel-btn",
+                    "type": "Button",
+                    "style": {
+                        "width": 360,
+                        "height": 120
+                    },
+                    "text": "Cancel"
+                }
+            ]
+        }
+    ]
+}

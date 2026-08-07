@@ -1,0 +1,68 @@
+{
+    "name": "dimensions-screen",
+    "type": "Window",
+    "visible": false,
+    "modal": true,
+    "scrollable": true,
+    "text": "Dimensions",
+    "closeButton": true,
+
+    "style": {
+        "margin": "auto",
+        "width": 470,
+        "maxHeight": "80%",
+        "paddingTop": 20,
+        "borderStyle": "none"
+    },
+    "children": [
+        {
+            "name": "dimensions-container",
+            "style": {
+                "flexDirection": "column",
+                "padding": 25
+            },
+            "custom": {
+                "rowTemplate": {
+                    "style": {
+                        "flexDirection": "row",
+                        "gap": 10,
+                        "height": 50,
+                        "marginBottom": 5
+                    },
+                    "children": [
+                        {
+                            "name": "dimension-btn",
+                            "type": "Button",
+                            "text": "dim-1234",
+                            "style": {
+                                "width": 300,
+                                "height": "100%"
+                            }
+                        },
+                        {
+                            "name": "edit-btn",
+                            "type": "Button",
+                            "classNames": [ "no-frame" ],
+                            "style": {
+                                "width": 50,
+                                "height": "100%",
+                                "backgroundImage": "mobile-ui",
+                                "backgroundImageRect": [0, 200, 100, 100]
+                            }
+                        },
+                        {
+                            "name": "on-off-btn",
+                            "type": "Button",
+                            "toggle": true,
+                            "text": "ON / OFF",
+                            "style": {
+                                "width": 80,
+                                "height": "100%"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

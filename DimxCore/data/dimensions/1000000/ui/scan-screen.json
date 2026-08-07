@@ -1,0 +1,35 @@
+ {
+    "name": "scan-screen",
+    "type": "Window",
+    "visible": false,
+    "classNames": [ "no-frame" ],
+    "style": {
+        "margin": "auto",
+        "width": 800,
+        "height": 1000,
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center"
+    },
+    "children": [
+        {
+            "name": "frame-img",
+            "type": "Image",
+            "style": {
+                "width": 600,
+                "height": 600,
+                "backgroundImage": "scan-frame-ui"
+            }
+        },
+        {
+            "name": "cancel-scan-btn",
+            "type": "Button",
+            "text": "Cancel",
+            "style": {
+                "width": 360,
+                "height": 120,
+                "marginTop": "auto"
+            }
+        }
+    ]
+}

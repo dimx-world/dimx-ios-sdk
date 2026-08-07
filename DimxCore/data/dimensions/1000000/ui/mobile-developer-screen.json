@@ -1,0 +1,66 @@
+{
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
+        { "condition": {"type": "platform", "value": "MagicLeap"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "mobile-developer-screen",
+    "type": "Window",
+    "visible": false,
+    "closeButton": true,
+    "scrollable": true,
+    "text": "Developer Space",
+    "style": {
+        "marginTop": 50,
+        "marginLeft": "auto",
+        "marginRight": "auto",
+        "marginBottom": 10,
+        "paddingTop": 50,
+        "width": 900,
+        "flexDirection": "column"
+    },
+    "children": [
+        {
+            "name": "logger-btn",
+            "type": "Button",
+            "text": "Show logs",
+            "style": {
+                "width": "100%",
+                "height": 100,
+                "marginTop": 10,
+                "marginBottom": 10
+            }
+        },
+        {
+            "name": "hide-ui-btn",
+            "type": "Button",
+            "text": "Hide UI",
+            "style": {
+                "width": "100%",
+                "height": 100,
+                "marginBottom": 10
+            }
+        },
+        {
+            "name": "world-frame",
+            "type": "CollapseFrame",
+            "text": "World Info",
+            "style": {
+                "marginBottom": 0,
+                "width": "100%"
+            },
+            "children": [
+                {
+                    "name": "world-txt",
+                    "type": "Text",
+                    "style": {
+                        "marginTop": 100,
+                        "marginBottom": 0,
+                        "width": "100%"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,54 @@
+{
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Desktop"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "asset-item-context-menu",
+    "type": "Window",
+    "visible": false,
+    "modal": true,
+    "panel": true,
+    "modalBackgroundOpacity": 0.0,
+    "style": {
+        "top": 0,
+        "left": 0,
+        "width": 200,
+        "padding": 0,
+        "flexDirection": "column",
+        "gap": 5,
+        "alignSelf": "flex-start",
+        "borderStyle": "none",
+        "borderRadius": 0
+    },
+    "styleSheet": {
+        "Button": {
+            "width": "100%",
+            "minHeight": 40,
+            "backgroundColor": [0.1, 0.1, 0.1, 1],
+            "borderStyle": "none",
+            "borderRadius": 0,
+            "paddingLeft": 10,
+            "paddingRight": 10,
+            "textAlign": "left"
+        }
+    },
+    "children": [
+        {
+            "name": "add-to-scene-btn",
+            "type": "Button",
+            "text": "Add to scene",
+            "visible": false
+        },
+        {
+            "name": "rename-btn",
+            "type": "Button",
+            "text": "Rename"
+        },
+        {
+            "name": "delete-btn",
+            "type": "Button",
+            "text": "Delete"
+        }
+    ]
+}

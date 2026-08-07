@@ -1,0 +1,27 @@
+{
+    "name": "style-editor-screen",
+    "type": "Window",
+    "visible": false,
+    "scrollable": true,
+    "text": "Styles Editor",
+    "closeButton": true,
+    "style": {
+        "marginLeft": "auto",
+        "marginRight": "auto",
+        "marginTop": 55,
+        "paddingTop": 40,
+        "maxWidth": 800,
+        "flexDirection": "column",
+        "flexGrow": 1
+    },
+    "children": [
+        {
+            "name": "style-editor",
+            "type": "StyleEditor",
+            "style": {
+                "width": "100%",
+                "flexGrow": 1
+            }
+        }
+    ]
+}

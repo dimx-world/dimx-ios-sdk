@@ -1,0 +1,74 @@
+{
+    "name": "manipulate-panel",
+    "visible": true,
+    "type": "Window",
+    "panel": true,
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Desktop"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+    "style": {
+        "marginLeft": 5,
+        "marginTop": 55,
+        "flexDirection": "column",
+        "gap": 5,
+        "padding": 5,
+        "alignSelf": "flex-start",
+        "borderStyle": "none",
+        "borderRadius": 0
+    },
+    "styleSheet": {
+        "Button": {
+            "backgroundColor": [0, 0, 0, 0],
+            "borderStyle": "none",
+            "width": 50,
+            "height": 50
+        }
+    },
+    "children": [
+        {
+            "name": "create-btn",
+            "type": "Button",
+            "toggle": true,
+            "style": {
+                "backgroundImage": "editor-desktop-ui",
+                "backgroundImageRect": [0, 0, 50, 50]
+            }
+        },
+        {
+            "name": "select-btn",
+            "type": "Button",
+            "style": {
+                "backgroundImage": "editor-desktop-ui",
+                "backgroundImageRect": [50, 0, 50, 50]
+            }
+        },
+        {
+            "name": "translate-btn",
+            "type": "Button",
+            "toggle": true,
+            "style": {
+                "backgroundImage": "editor-desktop-ui",
+                "backgroundImageRect": [100, 0, 50, 50]
+            }
+        },
+        {
+            "name": "rotate-btn",
+            "type": "Button",
+            "toggle": true,
+            "style": {
+                "backgroundImage": "editor-desktop-ui",
+                "backgroundImageRect": [150, 0, 50, 50]
+            }
+        },
+        {
+            "name": "scale-btn",
+            "type": "Button",
+            "toggle": true,
+            "style": {
+                "backgroundImage": "editor-desktop-ui",
+                "backgroundImageRect": [200, 0, 50, 50]
+            }
+        }
+    ]
+}

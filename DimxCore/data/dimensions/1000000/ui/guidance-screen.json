@@ -1,0 +1,32 @@
+{
+    "name": "guidance-screen",
+    "type": "Window",
+    "panel": true,
+    "visible": false,
+    "receiveInput": false,
+    "style": {
+        "marginTop": 250,
+        "marginLeft": "auto",
+        "marginRight": "auto",
+        "width": 900,
+        "height": 900,
+        "padding": 20,
+        "alignItems": "center",
+        "backgroundColor": [0, 0, 0, 0],
+        "borderStyle": "none"
+    },
+    "children": [
+        {
+            "name": "scan-img",
+            "type": "Image",
+            "style": {
+                "margin": "auto",
+                "width": 700,
+                "height": 700,
+                "objectFit": "contain",
+                "backgroundImage": "textures/hand-scan-large.gif",
+                "opacity": 0.5
+            }
+        }
+    ]
+}

@@ -1,0 +1,31 @@
+{
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Desktop"}, "value": true },
+        { "condition": "", "value": false }
+    ],
+
+    "name": "mobile-developer-panel",
+    "type": "Window",
+    "panel": true,
+    "visible": false,
+    "style": {
+        "marginLeft": "auto",
+        "marginRight": 0,
+        "marginTop": 100,
+        "marginBottom": "auto",
+        "backgroundColor": [0, 0, 0, 0]
+    },
+    "children": [
+        {
+            "name": "developer-btn",
+            "type": "Button",
+            "classNames": [ "no-frame" ],
+            "style": {
+                "width": 150,
+                "height": 150,
+                "backgroundImage": "mobile-ui",
+                "backgroundImageRect": [0, 0, 100, 100]
+            }
+        }
+    ]
+}

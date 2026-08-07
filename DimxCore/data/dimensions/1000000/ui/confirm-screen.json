@@ -1,0 +1,53 @@
+ {
+    "name": "confirm-screen",
+    "type": "Window",
+    "visible": false,
+    "closeButton": false,
+    "style": {
+        "margin": "auto",
+        "width": 500,
+        "flexDirection": "column",
+        "alignItems": "stretch",
+        "padding": 20
+    },
+    "modal": true,
+    "text": "Confirm",
+    "children": [
+        {
+            "name": "details",
+            "type": "Text",
+            "text": "Are you sure you want to proceed?",
+            "style": {
+                "margin": 20
+            }
+        },
+        {
+            "name": "button-container",
+            "style": {
+                "flexDirection": "row",
+                "justifyContent": "center",
+                "gap": 50,
+                "width": "100%",
+                "marginBottom": 20
+            },
+            "children": [
+                {
+                    "name": "ok-btn",
+                    "type": "Button",
+                    "text": "OK",
+                    "style": {
+                        "padding": 10
+                    }
+                },
+                {
+                    "name": "cancel-btn",
+                    "type": "Button",
+                    "text": "Cancel",
+                    "style": {
+                        "padding": 10
+                    }
+                }
+            ]
+        }
+    ]
+}

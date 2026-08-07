@@ -1,0 +1,50 @@
+{
+    "name": "logger-panel",
+    "visible": false,
+    "type": "Window",
+    "panel": true,
+    "text": "Logger",
+    "closeButton": true,
+    "resizable": true,
+    "style": {
+        "margin": "auto",
+        "width": 500,
+        "height": 500,
+        "flexDirection": "column",
+        "opacity": 0.8
+    },
+    "children": [
+        {
+            "name": "top-controls",
+            "style": { "flexDirection": "row", "width": "100%", "marginTop": 10, "height": 100 },
+            "children": [
+                {
+                    "name": "level-combo",
+                    "type": "ComboBox",
+                    "style": { "width": 300, "height": 100 }
+                },
+                {
+                    "name": "scroll-btn",
+                    "type": "Button",
+                    "text": "Auto-Scroll",
+                    "toggle": true,
+                    "pushed": true,
+                    "style": { "width": 300, "height": 100, "marginLeft": 20 }
+                }
+            ]
+        },
+        {
+            "name": "logger-list",
+            "type": "ListBox",
+            "wrapText": true,
+            "horizontalScroll": true,
+            "colorLogLines": true,
+            "style": {
+                "width": "100%",
+                "marginTop": 10,
+                "flexGrow": 1,
+                "backgroundColor": [0, 0, 0, 0]
+             }
+        }
+    ]
+}

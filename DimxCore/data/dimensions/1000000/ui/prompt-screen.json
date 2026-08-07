@@ -1,0 +1,61 @@
+ {
+    "name": "prompt-screen",
+    "type": "Window",
+    "visible": false,
+    "closeButton": false,
+    "style": {
+        "margin": "auto",
+        "width": 500,
+        "flexDirection": "column",
+        "padding": 20
+    },
+    "modal": true,
+    "text": "Dialog",
+    "children": [
+        {
+            "name": "details",
+            "type": "Text",
+            "text": "Please enter the required information below:",
+            "style": {
+                "width": "100%",
+                "margin": 20 
+            }
+        },
+        {
+            "name": "input-txt",
+            "type": "InputText",
+            "style": {
+                "width": "100%",
+                "marginBottom": 20
+            }
+        },
+        {
+            "name": "button-container",
+            "type": "Element",
+            "style": {
+                "width": "100%",
+                "flexDirection": "row",
+                "justifyContent": "center",
+                "gap": 50
+            },
+            "children": [
+                {
+                    "name": "ok-btn",
+                    "type": "Button",
+                    "text": "OK",
+                    "style": {
+                        "padding": 10
+                    }
+                },
+                {
+                    "name": "cancel-btn",
+                    "type": "Button",
+                    "text": "Cancel",
+                    "style": {
+                        "padding": 10
+                    }
+                }
+            ]
+        }
+    ]
+}

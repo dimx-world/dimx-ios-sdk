@@ -1,0 +1,45 @@
+{
+    "name": "account-screen",
+    "type": "Window",
+    "visible": false,
+    "text": "Current account",
+    "closeButton": true,
+    "style": {
+        "margin": "auto",
+        "width": 400,
+        "paddingLeft": 10,
+        "paddingRight": 10,
+        "paddingTop": 30,
+        "paddingBottom": 10,
+        "flexDirection": "column",
+        "alignItems": "left"
+    },
+    "children": [
+        {
+            "name": "username-label",
+            "type": "Text",
+            "text": "Username",
+            "style": {
+                "height": 30,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "username-input",
+            "type": "InputText",
+            "readOnly": true,
+            "style": {
+                "height": 30,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "logout-btn",
+            "type": "Button",
+            "text": "Logout",
+            "style": {
+                "height": 30
+            }
+        }
+    ]
+}

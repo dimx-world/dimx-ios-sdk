@@ -1,0 +1,22 @@
+{
+    "name": "stats-panel",
+    "visible": false,
+    "type": "Window",
+    "panel": true,
+    "receiveInput": false,
+    "style": {
+        "left": 10,
+        "top": 10,
+        "width": 300,
+        "height": 100,
+        "backgroundColor": [0, 0, 0, 0]
+     },
+    "children": [
+        {
+            "name": "fps-text",
+            "type": "Text",
+            "style": { "left": 10, "top": 0, "width": "100%", "height": 40},
+            "text": "9999"
+        }
+    ]
+}

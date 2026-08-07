@@ -1,0 +1,41 @@
+{
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Desktop"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "editor-menu",
+    "type": "Window",
+    "visible": false,
+    "modal": true,
+    "panel": true,
+    "style": {
+        "marginLeft": "auto",
+        "marginTop": 60,
+        "width": 250,
+        "padding": 10,
+        "flexDirection": "column",
+        "alignSelf": "flex-start"
+    },
+    "children": [
+        {
+            "name": "exit-btn",
+            "type": "Button",
+            "text": "Exit Editor",
+            "style": {
+                "width": "100%",
+                "height": 40,
+                "marginBottom": 10
+            }
+        },
+        {
+            "name": "style-editor-btn",
+            "type": "Button",
+            "text": "Style Editor",
+            "style": {
+                "width": "100%",
+                "height": 40
+            }
+        }
+    ]
+}

@@ -1,0 +1,77 @@
+{
+    "name": "dimensions-screen",
+    "type": "Window",
+    "visible": false,
+    "text": "Dimensions",
+    "closeButton": true,
+    "style": {
+        "marginLeft": "auto",
+        "marginRight": "auto",
+        "marginTop": 55,
+        "marginBottom": 10,
+        "width": 400,
+        "flexDirection": "column",
+        "padding": 10
+    },
+    "children": [
+        {
+            "name": "create-btn",
+            "type": "Button",
+            "text": "Create New Dimension",
+            "classNames": [ "no-frame" ],
+            "style": {
+                "marginTop": 25,
+                "width": "100%",
+                "height": 80,
+                "flexShrink": 0,
+                "backgroundImage": "editor-desktop-ui",
+                "backgroundImageRect": [0, 0, 50, 50],
+                "backgroundPosition": "left",
+                "textAlign": "left",
+                "padding": 20
+            }
+        },
+        {
+            "name": "dimensions-cont",
+            "style": {
+                "marginTop": 10,
+                "width": "100%",
+                "flexDirection": "column",
+                "gap": 5
+            },
+            "custom": {
+                "itemTemplate": {
+                    "style": {
+                        "width": "100%",
+                        "height": 50,
+                        "flexDirection": "row",
+                        "gap": 10,
+                        "flexShrink": 0
+                    },
+                    "children": [
+                        {
+                            "name": "dimension-btn",
+                            "type": "Button",
+                            "text": "dim-1234",
+                            "style": {
+                                "width": 320,
+                                "height": 50
+                            }
+                        },
+                        {
+                            "name": "delete-btn",
+                            "type": "Button",
+                            "classNames": [ "no-frame" ],
+                            "style": {
+                                "width": 50,
+                                "height": 50,
+                                "backgroundImage": "editor-desktop-ui",
+                                "backgroundImageRect": [100, 100, 80, 80]
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

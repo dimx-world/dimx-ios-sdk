@@ -1,0 +1,58 @@
+{
+    "name": "corner-panel",
+    "type": "Window",
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Desktop"}, "value": false },
+        { "condition": {"type": "platform", "value": "MagicLeap"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "styleSheet": {
+        "Button": {
+            "width": 50,
+            "height": 50
+        }
+    },
+
+    "classNames": [ "no-frame" ],
+    "style": {
+        "positionType": "absolute",
+        "right": 10,
+        "top": 10,
+        "flexDirection": "row",
+        "justifyContent": "flex-end",
+        "gap": 10,
+        "padding": 10
+    },
+
+    "panel": true,
+    "children": [
+        {
+            "name": "reload-button",
+            "type": "Button",
+            "classNames": [ "no-frame" ],
+            "style": {
+                "backgroundImage": "mobile-ui",
+                "backgroundImageRect": [100, 100, 100, 100]
+            }
+        },
+        {
+            "name": "editor-button",
+            "type": "Button",
+            "classNames": [ "no-frame" ],
+            "style": {
+                "backgroundImage": "mobile-ui",
+                "backgroundImageRect": [0, 100, 100, 100]
+            }
+        },
+        {
+            "name": "main-menu-button",
+            "type": "Button",
+            "classNames": [ "no-frame" ],
+            "style": {
+                "backgroundImage": "mobile-ui",
+                "backgroundImageRect": [0, 0, 100, 100]
+            }
+        }
+    ]
+}

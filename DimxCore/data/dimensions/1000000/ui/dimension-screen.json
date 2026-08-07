@@ -1,0 +1,85 @@
+{
+    "name": "dimension-screen",
+    "type": "Window",
+    "visible": false,
+    "scrollable": true,
+    "text": "Dimension: 1234567890",
+    "closeButton": true,
+    "style": {
+        "margin": "auto",
+        "marginTop": 50,
+        "marginBottom": 50,
+        "width": 470,
+        "maxWidth": 470,
+        "flexDirection": "column",
+        "paddingTop": 40,
+        "paddingLeft": 10,
+        "paddingRight": 10
+    },
+    "children": [
+        {
+            "name": "top-row",
+            "style": {
+                "flexDirection": "row",
+                "gap": 10,
+                "alignItems": "center",
+                "marginBottom": 10
+            },
+            "children": [
+                {
+                    "name": "icon-img",
+                    "type": "Image",
+                    "style": {
+                        "width": 50,
+                        "minHeight": 50,
+                        "backgroundImage": "dimension-icon-default"
+                    }
+                },
+                {
+                    "name": "dim-edit-btn",
+                    "type": "Button",
+                    "classNames": [ "no-frame" ],
+                    "style": {
+                        "width": 50,
+                        "minHeight": 50,
+                        "backgroundImage": "mobile-ui",
+                        "backgroundImageRect": [0, 200, 100, 100]
+                    },
+                    "toggle": true
+                },
+                {
+                    "name": "dim-toggle-btn",
+                    "type": "Button",
+                    "style": { "width": 80, "minHeight": 50 },
+                    "toggle": true,
+                    "text": "ON / OFF"
+                }
+            ]
+        },
+        {
+            "name": "locations-container",
+            "style": {
+                "flexDirection": "column",
+                "gap": 5,
+                "width": "100%",
+                "flexGrow": 1,
+                "paddingLeft": 20,
+                "paddingRight": 20,
+                "overflow": "scroll"
+            },
+            "custom": {
+                "rowTemplate": {
+                    "name": "location-btn",
+                    "type": "Button",
+                    "text": "dim-1234",
+                    "toggle": true,
+                    "style": {
+                        "width": "100%",
+                        "minHeight": 50,
+                        "marginBottom": 5
+                    }
+                }
+            }
+        }
+    ]
+}

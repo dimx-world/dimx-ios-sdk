@@ -1,0 +1,8 @@
+{
+    "materials": {
+        "Base": {
+            "baseColor": [1, 0, 0, 1],
+            "baseColorWeight": 1
+        }
+    }
+}

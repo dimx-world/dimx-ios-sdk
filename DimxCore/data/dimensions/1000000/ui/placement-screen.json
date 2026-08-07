@@ -1,0 +1,56 @@
+ {
+    "name": "placement-screen",
+    "type": "Window",
+    "visible": false,
+    "style": {
+        "margin": "auto",
+        "width": 810,
+        "height": 800,
+        "flexDirection": "column",
+        "padding": 20,
+        "backgroundColor": [0, 0, 0, 0]
+    },
+    "children": [
+        {
+            "name": "header-text",
+            "type": "Text",
+            "style": {
+                "width": 400,
+                "height": 100
+            },
+            "text": "Detecting surfaces..."
+        },
+        {
+            "name": "button-container",
+            "type": "Element",
+            "style": {
+                "width": "100%",
+                "flexDirection": "row",
+                "justifyContent": "space-between",
+                "gap": 5,
+                "marginTop": "auto"
+            },
+            "children": [
+                {
+                    "name": "place-btn",
+                    "type": "Button",
+                    "enabled": false,
+                    "text": "Place",
+                    "style": {
+                        "width": 350,
+                        "height": 120
+                    }
+                },
+                {
+                    "name": "cancel-btn",
+                    "type": "Button",
+                    "text": "Cancel",
+                    "style": {
+                        "width": 350,
+                        "height": 120
+                    }
+                }
+            ]
+        }
+    ]
+}

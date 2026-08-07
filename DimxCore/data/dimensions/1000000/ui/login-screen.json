@@ -1,0 +1,80 @@
+{
+    "name": "login-screen",
+    "type": "Window",
+    "visible": false,
+    "modal": true,
+    "text": "Login",
+    "style": {
+        "margin": "auto",
+        "width": 400,
+        "paddingLeft": 10,
+        "paddingRight": 10,
+        "paddingTop": 50,
+        "paddingBottom": 10,
+        "flexDirection": "column",
+        "alignItems": "left"
+    },
+    "children": [
+        {
+            "name": "username-label",
+            "type": "Text",
+            "text": "Username",
+            "style": {
+                "height": 20,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "username-input",
+            "type": "InputText",
+            "style": {
+                "height": 20,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "password-label",
+            "type": "Text",
+            "text": "Password",
+            "style": {
+                "height": 20,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "password-input",
+            "type": "InputText",
+            "password": true,
+            "style": {
+                "height": 20,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "message-text",
+            "type": "Text",
+            "style": {
+                "height": 20,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "login-btn",
+            "type": "Button",
+            "text": "Login",
+            "style": {
+                "height": 20,
+                "marginBottom": 5
+            }
+        },
+        {
+            "name": "cancel-btn",
+            "type": "Button",
+            "text": "Cancel",
+            "style": {
+                "height": 20,
+                "marginBottom": 5
+            }
+        }
+    ]
+}

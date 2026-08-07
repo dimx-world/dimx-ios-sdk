@@ -1,0 +1,65 @@
+{
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Desktop"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "asset-add-menu",
+    "type": "Window",
+    "visible": false,
+    "modal": true,
+    "panel": true,
+    "modalBackgroundOpacity": 0.0,
+    "style": {
+        "top": 0,
+        "right": 0,
+        "width": 250,
+        "padding": 0,
+        "flexDirection": "column",
+        "alignSelf": "flex-start",
+        "borderStyle": "none",
+        "borderRadius": 0
+    },
+    "styleSheet": {
+        "Button": {
+            "width": "100%",
+            "minHeight": 40,
+            "backgroundColor": [0.1, 0.1, 0.1, 1],
+            "borderStyle": "none",
+            "borderRadius": 0,
+            "padding": 10,
+            "margin": 0,
+            "textAlign": "left"
+        }
+    },
+    "children": [
+        {
+            "name": "new-folder-btn",
+            "type": "Button",
+            "text": "New folder"
+        },
+        {
+            "name": "separator",
+            "style": {
+                "width": "100%",
+                "height": 3,
+                "backgroundColor": [0.3, 0.3, 0.3, 1]
+            }
+        },
+        {
+            "name": "import-files-btn",
+            "type": "Button",
+            "text": "Import files..."
+        },
+        {
+            "name": "import-folder-btn",
+            "type": "Button",
+            "text": "Import folder..."
+        },
+        {
+            "name": "import-fbx-btn",
+            "type": "Button",
+            "text": "Import FBX model"
+        }
+    ]
+}

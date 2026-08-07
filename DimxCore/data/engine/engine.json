@@ -1,0 +1,190 @@
+{
+    "engine": {},
+
+    "threads": {
+        "max_threads": 10
+    },
+
+    "resource_interface": {
+        "update_interval_sec": 1.0,
+        "request_timeout_sec": 5.0,
+        "local": {
+            "data_path": ""
+        },
+        "remote": {
+            "files_host": "https://files.dimx.world",
+            "default_generic_service": {
+                "ws_url": "ws://generic-01.dimx.world:8000",
+                "wss_url": "wss://generic-01.dimx.world:8001"
+            }
+        },
+        "cache": {
+            "?enabled": [
+                { "condition": {"type": "platform", "value": "Web"}, "value": false },
+                { "condition": "", "value": true }
+            ]
+        }
+    },
+
+
+    "?display": [
+        {
+            "condition": {"type": "platform", "value": "Desktop"},
+            "value": {"width": 1280, "height": 720}
+        },
+        {
+            "condition": {"type": "platform", "value": "Mobile"},
+            "value": {"width": 432, "height": 888}
+        },
+        {
+            "condition": {"type": "platform", "value": "MagicLeap"},
+            "value": {"width": 1280, "height": 960}
+        }
+    ],
+
+    "device_ar": {
+    },
+
+    "cloud_anchors": {
+    },
+
+    "device_camera": {
+        "enabled": true,
+        "world_entity": "cam-plane",
+        "texture_width": 1088,
+        "texture_height": 1088
+    },
+
+    "account": {
+    },
+
+    "geolocation": {
+        "significant_dist": 5.0
+    },
+
+    "analytics": {
+        "enabled": true
+    },
+
+    "multimedia": {
+    },
+
+    "render": {
+        "clear_color": "0.1 0.1 0.1 0.0",
+        "enable_back_face_culling": true,
+        "front_face_vertex_order": "CounterClockwise",
+        "shadows_enabled": true,
+        "depth": {
+            "enabled": false,
+            "texture": "depth-map-tex"
+        }
+    },
+
+    "audio": {
+
+    },
+
+    "ar_core": {
+    },
+
+    "tracking": {
+        "enabled": true,
+        "max_targets": 5,
+        "mode": "Fixed", // Manual
+        "world_origin": "1 -1 1"
+    },
+
+    "input": {
+        //    "key_bindings": "@key_bindings.json",
+    },
+
+    "camera_ctrl": {
+        "move_speed": 10.0,
+        "rotate_speed": 0.1
+    },
+
+    "camera": {
+        "position": "1 1 2",
+        //"position": "-1 2 0",
+        "target": "0 0 0",
+        "fov": 45.0,
+        "minz": 0.1,
+        "?maxz": [
+            {
+                "condition": {"type": "platform", "value": "XR"},
+                "value": 50
+            },
+            { "condition": "", "value": 100 }
+        ]
+    },
+
+    "physics": {
+        "debug_mode": false,
+        "enable_pvd": false
+    },
+
+    "world": {
+        "app_dimension": "1000000",
+        "editor_dimension": "1000100",
+        "public_dimension": "1000200",
+        "scene": {
+            "skybox": "sky",
+            "lighting": {
+                "type": "Directional",
+                "position": "0 3 0",
+                "direction": "0 -1 -0.01",
+
+                "shadow_enabled": false,
+                "shadow_map_size": 512,
+                "shadow_softness": 2.0,
+                "shadow_darkness": 0.7,
+                "shadow_decay_dist": 1.7,
+
+                "volume_width": 3,
+                "volume_height": 3,
+                "volume_near": 0.1,
+                "volume_far": 10,
+
+                "ambient_color": "0.4 0.4 0.4",
+                "diffuse_color": "1 1 1",
+                "specular_color": "0.1 0.1 0.1"
+            }
+        }
+    },
+
+    "imgui": {
+        "fonts": {
+            "default": {
+                "name": "inter",
+                "weight": "Normal",
+                "?size": [
+                    { "condition": { "type": "platform", "value": "Mobile"}, "value": 48 },
+                    { "condition": "", "value": 16 }
+                ]
+            },
+            "files" : {
+                //"inter": "fonts/inter_regular.ttf"
+                "inter": "fonts/inter_medium.ttf"
+            },
+            "load": [
+                { "name": "inter", "weight": "Normal", "file": "fonts/inter_medium.ttf" },
+                { "name": "inter", "weight": "Bold", "file": "fonts/inter_bold.ttf" },
+                { "name": "inter", "weight": "Black", "file": "fonts/inter_black.ttf" }
+            ],
+            "fallback": [
+            ]
+        }
+    },
+
+    "materials": {
+        "public_list": [
+            "Standard"
+        ]
+    },
+
+    "ui" : {
+        "stylesheet": "@stylesheet.json"
+    },
+    "editor_models": "@models/editor_models.json",
+    "aliases": "@aliases.json"
+}

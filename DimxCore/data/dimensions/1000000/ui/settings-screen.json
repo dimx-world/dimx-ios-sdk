@@ -1,0 +1,27 @@
+ {
+    "name": "settings-screen",
+    "type": "Window",
+    "visible": false,
+    "modal": false,
+    "text": "Settings",
+    "scrollable": true,
+    "closeButton": true,
+    "style": {
+        "margin": "auto",
+        "marginTop": 55,
+        "width": 850,
+        "padding": 20,
+        "paddingTop": 40,
+        "height": 700
+    },
+    "children": [
+        {
+            "name": "props-view",
+            "type": "PropertyView",
+            "style": {
+                "width": "100%",
+                "height": "100%"
+            }
+        }
+    ]
+}

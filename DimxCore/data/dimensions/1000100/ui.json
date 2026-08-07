@@ -1,0 +1,26 @@
+{
+    "root": {
+        "children": [
+            "@top-panel.json",
+            "@properties-screen.json",
+            "@dimensions-screen.json",
+            "@locations-screen.json",
+            "@objects-screen.json",
+            "@editor-menu.json",
+            "@anchor-placement-screen.json",
+            "@object-placement-screen.json",
+            "@manipulate-panel.json",
+            "@create-panel.json",
+            "@style-editor-screen.json",
+            "@asset-browser-screen.json",
+            "@asset-add-menu.json",
+            "@asset-item-context-menu.json",
+            "@mobile-bottom-panel.json",
+            "@mobile-right-panel.json",
+            "@mobile-anchors-screen.json",
+            "@mobile-properties-screen.json",
+            "@mobile-create-screen.json",
+            "@mobile-top-panel.json"
+        ]
+    }
+}
