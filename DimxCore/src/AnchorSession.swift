@@ -8,49 +8,51 @@
 
 import Foundation
 import ARKit
+import ARCoreGARSession
+import ARCoreCloudAnchors
 import DimxNative
 
-public func cloudAnchorStateToCore(_ stateValue: Int) -> Int {
-    switch stateValue {
-        case CloudAnchorState.taskInProgress: return Int(CLOUD_ANCHOR_STATE_IN_PROGRESS)
-        case CloudAnchorState.success: return Int(CLOUD_ANCHOR_STATE_SUCCESS)
-        case CloudAnchorState.errorInternal,
-             CloudAnchorState.errorNotAuthorized,
-             CloudAnchorState.errorResourceExhausted,
-             CloudAnchorState.errorHostingDatasetProcessingFailed,
-             CloudAnchorState.errorCloudIdNotFound,
-             CloudAnchorState.errorResolvingSdkVersionTooOld,
-             CloudAnchorState.errorResolvingSdkVersionTooNew,
-             CloudAnchorState.errorHostingServiceUnavailable:
+func cloudAnchorStateToCore(_ state: GARCloudAnchorState) -> Int {
+    switch state {
+        case .taskInProgress: return Int(CLOUD_ANCHOR_STATE_IN_PROGRESS)
+        case .success: return Int(CLOUD_ANCHOR_STATE_SUCCESS)
+        case .errorInternal,
+             .errorNotAuthorized,
+             .errorResourceExhausted,
+             .errorHostingDatasetProcessingFailed,
+             .errorCloudIdNotFound,
+             .errorResolvingSdkVersionTooOld,
+             .errorResolvingSdkVersionTooNew,
+             .errorHostingServiceUnavailable:
             return Int(CLOUD_ANCHOR_STATE_ERROR)
-        case CloudAnchorState.none: return Int(CLOUD_ANCHOR_STATE_NONE)
+        case .none: return Int(CLOUD_ANCHOR_STATE_NONE)
         default: return Int(CLOUD_ANCHOR_STATE_NONE)
     }
 }
 
-public func cloudAnchorStateToStr(_ stateValue: Int) -> String {
-    switch stateValue {
-        case CloudAnchorState.taskInProgress:                       return "In Progress"
-        case CloudAnchorState.success:                              return "Success"
-        case CloudAnchorState.errorInternal:                        return "Internal Error"
-        case CloudAnchorState.errorNotAuthorized:                   return "Not Authorized"
-        case CloudAnchorState.errorResourceExhausted:               return "Resource Exhausted"
-        case CloudAnchorState.errorHostingDatasetProcessingFailed:  return "Hosting Dataset Processing Failed"
-        case CloudAnchorState.errorCloudIdNotFound:                 return "Cloud Id Not Found"
-        case CloudAnchorState.errorResolvingSdkVersionTooOld:       return "Resolving Sdk Version Too Old"
-        case CloudAnchorState.errorResolvingSdkVersionTooNew:       return "Resolving Sdk Version Too New"
-        case CloudAnchorState.errorHostingServiceUnavailable:       return "Hosting Service Unavailable"
-        case CloudAnchorState.none:                                 return "None"
-        default:                                                    return "None"
+func cloudAnchorStateToStr(_ state: GARCloudAnchorState) -> String {
+    switch state {
+        case .taskInProgress:                       return "In Progress"
+        case .success:                              return "Success"
+        case .errorInternal:                        return "Internal Error"
+        case .errorNotAuthorized:                   return "Not Authorized"
+        case .errorResourceExhausted:               return "Resource Exhausted"
+        case .errorHostingDatasetProcessingFailed:  return "Hosting Dataset Processing Failed"
+        case .errorCloudIdNotFound:                 return "Cloud Id Not Found"
+        case .errorResolvingSdkVersionTooOld:       return "Resolving Sdk Version Too Old"
+        case .errorResolvingSdkVersionTooNew:       return "Resolving Sdk Version Too New"
+        case .errorHostingServiceUnavailable:       return "Hosting Service Unavailable"
+        case .none:                                 return "None"
+        default:                                    return "None"
     }
 }
 
-public func featureMapQualityToCore(_ qualityValue: Int) -> Int {
-    switch qualityValue {
-        case FeatureMapQuality.good:         return Int(FEATURE_MAP_QUALITY_GOOD)
-        case FeatureMapQuality.insufficient: return Int(FEATURE_MAP_QUALITY_INSUFFICIENT)
-        case FeatureMapQuality.sufficient:   return Int(FEATURE_MAP_QUALITY_SUFFICIENT)
-        default:                             return Int(FEATURE_MAP_QUALITY_NONE)
+func featureMapQualityToCore(_ quality: GARFeatureMapQuality) -> Int {
+    switch quality {
+        case .good:         return Int(FEATURE_MAP_QUALITY_GOOD)
+        case .insufficient: return Int(FEATURE_MAP_QUALITY_INSUFFICIENT)
+        case .sufficient:   return Int(FEATURE_MAP_QUALITY_SUFFICIENT)
+        default:            return Int(FEATURE_MAP_QUALITY_NONE)
     }
 }
 
@@ -65,24 +67,17 @@ func writeStringToPointer(_ string: String, _ pointer: UnsafeMutableRawPointer, 
 
 class GAnchorInfo {
     var token: UInt = 0
-    var cloudAnchor: AnyObject?
+    var cloudAnchor: GARAnchor?
     var localAnchorId: Int = -1
-    var hostFuture: AnyObject?
-    var resolveFuture: AnyObject?
+    var hostFuture: GARHostCloudAnchorFuture?
+    var resolveFuture: GARResolveCloudAnchorFuture?
 }
 
-public class AnchorSession {
+class AnchorSession {
     let ARCORE_API_KEY = "AIzaSyC9CB2bvJ6iZN1YruOlc09-7nlMMB2NucA"
-    public static let instance = AnchorSession()
-    private var provider: CloudAnchorProvider?
+    static let instance = AnchorSession()
 
-    private var requiredProvider: CloudAnchorProvider {
-        guard let provider = provider else {
-            fatalError("No CloudAnchorProvider set - cloud anchors will not be available")
-        }
-        return provider
-    }
-
+    var gSession: GARSession!
     var anchors = [GAnchorInfo?]()
 
     static func initCallbacks() {
@@ -109,19 +104,28 @@ public class AnchorSession {
         }
     }
 
-    public func setProvider(_ provider: CloudAnchorProvider?) {
-        self.provider = provider
-    }
-
     func initialize() {
-        if !requiredProvider.initialize(apiKey: ARCORE_API_KEY, bundleId: Bundle.main.bundleIdentifier) {
-            fatalError("CloudAnchorProvider initialization failed")
+        do {
+            gSession = try GARSession(apiKey: ARCORE_API_KEY, bundleIdentifier: Bundle.main.bundleIdentifier)
+            let config = GARSessionConfiguration()
+            config.cloudAnchorMode = .enabled
+            var error: NSError?
+            gSession.setConfiguration(config, error: &error)
+            if let error = error {
+                Logger.error("Error setting GARSession configuration: \(error)")
+            }
+        } catch {
+            fatalError("Error creating GARSession: \(error.localizedDescription)")
         }
     }
 
-    public func update() {
+    func update() {
         guard let frame = DeviceAR.instance.currentFrame() else { return }
-        requiredProvider.update(frame: frame)
+        do {
+            try gSession?.update(frame)
+        } catch {
+            Logger.error("Error updating GARSession: \(error.localizedDescription)")
+        }
     }
 
     func createAnchor(_ token: UInt, _ transformPtr: UnsafeRawPointer, _ ttlDays: Int) {
@@ -133,13 +137,13 @@ public class AnchorSession {
         anchors[anchorId]!.token = token
         anchors[anchorId]!.localAnchorId = localAnchorId
 
-        weak var weakSelf = self
-        anchors[anchorId]!.hostFuture = requiredProvider.hostCloudAnchor(localAnchor!.anchor!, ttlDays: ttlDays,
-            completion: { cloudId, state in weakSelf?.onHostAnchor(token, cloudId, state, anchorId) })
-
-        if anchors[anchorId]!.hostFuture == nil {
-            Logger.error("Failed to host cloud anchor")
-            onHostAnchor(token, nil, CloudAnchorState.errorInternal, anchorId)
+        do {
+            weak var weakSelf = self
+            anchors[anchorId]!.hostFuture = try gSession.hostCloudAnchor(localAnchor!.anchor!, ttlDays: ttlDays,
+                completionHandler: { cloudId, state in weakSelf?.onHostAnchor(token, cloudId, state, anchorId) })
+        } catch {
+            Logger.error("Failed to host cloud anchor: \(error.localizedDescription)")
+            onHostAnchor(token, nil, .errorInternal, anchorId)
         }
     }
 
@@ -148,13 +152,13 @@ public class AnchorSession {
         anchors.append(GAnchorInfo())
         anchors[anchorId]!.token = token
 
-        weak var weakSelf = self
-        anchors[anchorId]!.resolveFuture = requiredProvider.resolveCloudAnchor(nativeId,
-            completion: { anchor, state in weakSelf?.onResolveAnchor(token, anchor, state, anchorId) })
-
-        if anchors[anchorId]!.resolveFuture == nil {
-            Logger.error("Failed to resolve cloud anchor")
-            onResolveAnchor(token, nil, CloudAnchorState.errorInternal, anchorId)
+        do {
+            weak var weakSelf = self
+            anchors[anchorId]!.resolveFuture = try gSession.resolveCloudAnchor(nativeId,
+                completionHandler: { anchor, state in weakSelf?.onResolveAnchor(token, anchor, state, anchorId) })
+        } catch {
+            Logger.error("Failed to resolve cloud anchor: \(error.localizedDescription)")
+            onResolveAnchor(token, nil, .errorInternal, anchorId)
         }
     }
 
@@ -170,10 +174,10 @@ public class AnchorSession {
         }
 
         if let future = anchors[index!]?.resolveFuture {
-            requiredProvider.cancelFuture(future)
+            future.cancel()
         }
         if let future = anchors[index!]?.hostFuture {
-            requiredProvider.cancelFuture(future)
+            future.cancel()
         }
 
         if anchors[index!]!.localAnchorId >= 0 {
@@ -181,13 +185,13 @@ public class AnchorSession {
         }
 
         if let cloudAnchor = anchors[index!]?.cloudAnchor {
-            requiredProvider.removeAnchor(cloudAnchor)
+            gSession.remove(cloudAnchor)
         }
 
         anchors[index!] = nil
     }
 
-    func onHostAnchor(_ token: UInt, _ cloudId: String?, _ stateValue: Int, _ anchorId: Int) {
+    func onHostAnchor(_ token: UInt, _ cloudId: String?, _ state: GARCloudAnchorState, _ anchorId: Int) {
         if anchorId >= anchors.count {
             fatalError("Invalid anchor id - out of bounds: \(anchorId)")
         }
@@ -196,14 +200,14 @@ public class AnchorSession {
         }
 
         anchors[anchorId]!.hostFuture = nil
-        CloudAnchorSession_onCreateAnchor(token, cloudAnchorStateToStr(stateValue), cloudId != nil ? cloudId! : "", cloudId != nil ? anchorId : -1)
+        CloudAnchorSession_onCreateAnchor(token, cloudAnchorStateToStr(state), cloudId != nil ? cloudId! : "", cloudId != nil ? anchorId : -1)
 
         if cloudId == nil {
             removeAnchor(token, anchorId)
         }
     }
 
-    func onResolveAnchor(_ token: UInt, _ anchor: AnyObject?, _ stateValue: Int, _ anchorId: Int) {
+    func onResolveAnchor(_ token: UInt, _ anchor: GARAnchor?, _ state: GARCloudAnchorState, _ anchorId: Int) {
         if anchorId >= anchors.count {
             fatalError("Invalid anchor id - out of bounds: \(anchorId)")
         }
@@ -211,13 +215,13 @@ public class AnchorSession {
         if anchors[anchorId] == nil {
             Logger.warn("Anchor resolved after removal [\(anchorId)]")
             if let anchor = anchor {
-                requiredProvider.removeAnchor(anchor)
+                gSession.remove(anchor)
             }
             return
         }
 
         anchors[anchorId]!.cloudAnchor = anchor
-        CloudAnchorSession_onResolveAnchor(token, anchor != nil ? anchorId : -1, cloudAnchorStateToStr(stateValue))
+        CloudAnchorSession_onResolveAnchor(token, anchor != nil ? anchorId : -1, cloudAnchorStateToStr(state))
 
         if anchor == nil {
             removeAnchor(token, anchorId)
@@ -229,11 +233,11 @@ public class AnchorSession {
             fatalError("Invalid anchor id - out of bounds")
         }
 
-        if let cloudAnchor = anchors[anchorId]?.cloudAnchor,
-           let result = requiredProvider.getTrackingResult(cloudAnchor),
-           result.isTracking {
-            var transform = result.transform
-            TrackingResult_assign(outPtr, true, &transform)
+        if let cloudAnchor = anchors[anchorId]?.cloudAnchor {
+            if cloudAnchor.trackingState == .tracking && cloudAnchor.hasValidTransform {
+                var transform = cloudAnchor.transform
+                TrackingResult_assign(outPtr, true, &transform)
+            }
         } else if anchors[anchorId]!.localAnchorId >= 0 {
             DeviceAR.instance.getAnchorTracking(anchors[anchorId]!.localAnchorId, outPtr)
         }
@@ -243,7 +247,11 @@ public class AnchorSession {
         guard let transform = DeviceAR.instance.currentFrame()?.camera.transform else {
             return Int(FEATURE_MAP_QUALITY_NONE)
         }
-        let quality = requiredProvider.estimateFeatureMapQuality(transform: transform)
-        return featureMapQualityToCore(quality)
+        do {
+            let quality = try gSession.estimateFeatureMapQualityForHosting(transform)
+            return featureMapQualityToCore(quality)
+        } catch {
+            return Int(FEATURE_MAP_QUALITY_NONE)
+        }
     }
 }

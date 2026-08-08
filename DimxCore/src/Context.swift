@@ -48,15 +48,9 @@ public class Context
     init(){}
     
     func initializeInternal(_ window: UIWindow, _ appConfig: AppConfig) {
-        guard let provider = appConfig.anchorSessionProvider() else {
-            fatalError("CloudAnchorProvider must be set in AppConfig before initializing Context")
-        }
-        
         mAppConfig = appConfig
         mLocationManager = LocationManager()
         mWindow = window
-        
-        AnchorSession.instance.setProvider(provider)
     }
 
     public func permissionsGranted() -> Bool {

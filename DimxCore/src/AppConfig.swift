@@ -17,7 +17,6 @@ public class AppConfig
     private var mSharePhotoEnabled: Bool = false
     private var mShareVideoEnabled: Bool = false
     private var mWebVersions: [String] = []
-    private var mAnchorSessionProvider: CloudAnchorProvider?
 
     public init() {}
 
@@ -51,14 +50,6 @@ public class AppConfig
     
     public func webVersions() -> [String] {
         return mWebVersions
-    }
-    
-    public func setAnchorSessionProvider(_ provider: CloudAnchorProvider?) {
-        mAnchorSessionProvider = provider
-    }
-    
-    func anchorSessionProvider() -> CloudAnchorProvider? {
-        return mAnchorSessionProvider
     }
     
     func toJsonString() -> String {

@@ -16,10 +16,6 @@ let package = Package(
             name: "DimxCore",
             targets: ["DimxCore"]
         ),
-        .library(
-            name: "DimxARCore",
-            targets: ["DimxARCore"]
-        ),
     ],
     dependencies: [
         .package(url: "https://github.com/google-ar/arcore-ios-sdk", from: "1.54.0")
@@ -28,8 +24,10 @@ let package = Package(
         .target(
             name: "DimxCore",
             dependencies: [
-                "DimxNative"
-                /* ARCore is optional and loaded dynamically at runtime */
+                "DimxNative",
+                .product(name: "ARCoreGARSession", package: "arcore-ios-sdk"),
+                .product(name: "ARCoreCloudAnchors", package: "arcore-ios-sdk"),
+                .product(name: "ARCoreGeospatial", package: "arcore-ios-sdk"),
             ],
             path: "DimxCore",
             resources: [
@@ -101,18 +99,6 @@ let package = Package(
         .binaryTarget(name: "avutil", url: "https://dl.dimx.world/sdk/ios/ffmpeg/9.0/avutil.xcframework.zip", checksum: "fe319f0236e5ad03a8f1b6a3a8ba8fd5c332c7c8f267a27d497ffb3fc2a78b75"),
         .binaryTarget(name: "swresample", url: "https://dl.dimx.world/sdk/ios/ffmpeg/9.0/swresample.xcframework.zip", checksum: "8a982fa01b9efdcdf5b8a5294402516766376f52855976cde5cf7cbbf5c9edc7"),
         .binaryTarget(name: "swscale", url: "https://dl.dimx.world/sdk/ios/ffmpeg/9.0/swscale.xcframework.zip", checksum: "2f5dd92d026d25fa37c5ec1a62389301f94deaa9a546dc38a992132e177d2c3d"),
-
-        .target(
-            name: "DimxARCore",
-            dependencies: [
-                "DimxCore",
-                .product(name: "ARCoreGARSession", package: "arcore-ios-sdk"),
-                .product(name: "ARCoreCloudAnchors", package: "arcore-ios-sdk"),
-                .product(name: "ARCoreGeospatial", package: "arcore-ios-sdk"),
-            ],
-            path: "DimxARCore",
-            sources: ["src"]
-        ),
     ],
     cxxLanguageStandard: .cxx2b
 )
