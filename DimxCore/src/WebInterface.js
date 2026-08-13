@@ -22,6 +22,21 @@ class IOSNativeInterface
     requestGeolocationUpdate() {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_GEOLOCATION_UPDATE"});
     }
+
+    // Synchronous by contract, so it cannot go through a message handler - those are
+    // one-way. The list is injected at document start alongside this script and holds the
+    // providers the app is actually configured to run; the page uses its own popup for
+    // anything missing from it.
+    canSignInWithProvider(providerId) {
+        const providers = window.DIMX_NATIVE_SIGNIN_PROVIDERS;
+        return Array.isArray(providers) && providers.indexOf(providerId) >= 0;
+    }
+
+    // Returns nothing: the result arrives later through
+    // window.DimxInterface.onProviderSignInResult, exactly once per call.
+    startProviderSignIn(providerId) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "START_PROVIDER_SIGN_IN", providerId: providerId});
+    }
 } // class IOSNativeInterface
 
 window.Native = new IOSNativeInterface()

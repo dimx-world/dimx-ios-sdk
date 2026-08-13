@@ -17,6 +17,8 @@ public class AppConfig
     private var mSharePhotoEnabled: Bool = false
     private var mShareVideoEnabled: Bool = false
     private var mWebVersions: [String] = []
+    private var mGoogleClientId: String = ""
+    private var mAppleSignInEnabled: Bool = true
 
     public init() {}
 
@@ -51,7 +53,30 @@ public class AppConfig
     public func webVersions() -> [String] {
         return mWebVersions
     }
-    
+
+    // Overrides the OAuth client id used for native Google sign-in. Left unset, it comes
+    // from GoogleService-Info.plist (CLIENT_ID) or the GIDClientID Info.plist key; with
+    // none of the three, the web page falls back to its own popup for Google - which
+    // Google then refuses with disallowed_useragent.
+    public func setGoogleClientId(_ value: String) {
+        mGoogleClientId = value
+    }
+
+    func googleClientId() -> String {
+        return mGoogleClientId
+    }
+
+    // Native Sign in with Apple needs the com.apple.developer.applesignin entitlement and
+    // a provisioning profile that carries it. A build without the capability must turn
+    // this off, so the page uses its own popup instead of a sheet that fails immediately.
+    public func setAppleSignInEnabled(_ value: Bool) {
+        mAppleSignInEnabled = value
+    }
+
+    func appleSignInEnabled() -> Bool {
+        return mAppleSignInEnabled
+    }
+
     func toJsonString() -> String {
         var jsonObject: [String: Any] = [
             "back_enabled": mShowAppScreenAction != nil,

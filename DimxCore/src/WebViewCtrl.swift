@@ -11,14 +11,32 @@ import WebKit
 import CoreLocation
 import DimxNative
 
-class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNavigationDelegate {
+class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNavigationDelegate, UIAdaptivePresentationControllerDelegate {
+    // Hosts that have to stay inside the web view. The Firebase auth handler lives on
+    // firebaseapp.com while the app is served from dimx.world, so a rule written around
+    // the app's own domain misses it - which is how the popup ended up in Safari, where
+    // the credential had no opener to return to.
+    static private let inAppHosts: Set<String> = [
+        "dimx-world.firebaseapp.com",
+        "dimx-world.web.app",
+        "accounts.google.com",
+        "appleid.apple.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "localhost",
+        "sergei-laptop"
+    ]
+
     //static private var startupAppUrl: String = ""
     var spinnerView: WKWebView!
     var webView: WKWebView!
     var versionReloaded = false
     var firstTimeUrlLoad = true
-    
-    
+
+    // Web views opened by window.open, kept alive while they are on screen.
+    private var childWebViewCtrls: [ChildWebViewCtrl] = []
+
+
     func loadWebUrl(_ url: String) {
         Logger.info("loadAppUrl: \(url)")
         var webUrl = Context.inst().convertAppUrlToWebUrl(url)
@@ -63,6 +81,15 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         let appInstContent = "window.DIMX_APP_INSTANCE_ID = '\(Context.inst().settings().appInstanceId())'"
         let appInstScript = WKUserScript(source: appInstContent, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         config.userContentController.addUserScript(appInstScript)
+
+        //--- Inject the providers this build signs in with natively.
+        // At document start, like everything else here: the page decides whether it is
+        // running in the app by reading 'Native' in window as its bundle loads.
+        let providers = ProviderSignIn.supportedProviders().map { "'\($0)'" }.joined(separator: ", ")
+        Logger.info("Native provider sign-in supports: [\(providers)]")
+        let providersContent = "window.DIMX_NATIVE_SIGNIN_PROVIDERS = [\(providers)]"
+        let providersScript = WKUserScript(source: providersContent, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        config.userContentController.addUserScript(providersScript)
 
         //--- Inject WebInterface
         let filepath = Bundle.module.path(forResource: "WebInterface", ofType: "js")!
@@ -156,9 +183,65 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
                 onsGeolocationUpdate(loc)
             }
             return
+        } else if (cmd == "START_PROVIDER_SIGN_IN") {
+            startProviderSignIn(params["providerId"] as! String)
+            return
         }
-       
+
         fatalError("Unknown web command: [" + cmd + "]")
+    }
+
+    func startProviderSignIn(_ providerId: String) {
+        Logger.info("Starting native provider sign-in: \(providerId)")
+        ProviderSignIn.shared.start(providerId, presentingIn: self) { [weak self] result in
+            switch result {
+            case .success(let credential):
+                var payload: [String: Any] = [
+                    "providerId": credential.providerId,
+                    "idToken": credential.idToken
+                ]
+                if let rawNonce = credential.rawNonce {
+                    payload["rawNonce"] = rawNonce
+                }
+                self?.sendProviderSignInResult(payload)
+
+            case .failure(let error):
+                Logger.error("Provider sign-in [\(providerId)] failed: \(error.message)")
+                var payload: [String: Any] = [
+                    "providerId": providerId,
+                    "error": error.message
+                ]
+                if let code = error.code {
+                    payload["code"] = code
+                }
+                self?.sendProviderSignInResult(payload)
+            }
+        }
+    }
+
+    // The page keeps a promise pending until this arrives, so it has to be sent for every
+    // outcome - a silent failure leaves the sign-in button spinning for good.
+    func sendProviderSignInResult(_ payload: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else {
+            Logger.error("Failed to serialize provider sign-in result")
+            return
+        }
+
+        let jscode =
+            """
+            if (window.DimxInterface && window.DimxInterface.onProviderSignInResult) {
+                window.DimxInterface.onProviderSignInResult(\(json))
+            } else {
+                console.error('FROM SWIFT: window.DimxInterface.onProviderSignInResult not defined')
+            }
+            """;
+        webView.evaluateJavaScript(jscode) {
+            (_, error) in
+            if error != nil {
+                Logger.error("JS CALL ERROR: \(String(describing: error))")
+            }
+        }
     }
 
     func onsGeolocationUpdate(_ loc: CLLocation) {
@@ -192,7 +275,14 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         alertController.addAction(UIAlertAction(title: "Ok", style: .default, handler: { (action) in
             completionHandler()
         }))
-        self.present(alertController, animated: true, completion: nil)
+        presentPanel(alertController)
+    }
+
+    // These panels also serve the web views opened by window.open, which sit in a sheet
+    // above this controller - presenting from self would fail while one is up.
+    private func presentPanel(_ alertController: UIAlertController) {
+        let presenter = topMostViewController() ?? self
+        presenter.present(alertController, animated: true, completion: nil)
     }
 
     func webView(_ webView: WKWebView,
@@ -217,7 +307,7 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             completionHandler(false)
         }))
 
-        self.present(alertController, animated: true, completion: nil)
+        presentPanel(alertController)
     }
 
     func webView(_ webView: WKWebView,
@@ -240,46 +330,113 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         alertController.addAction(UIAlertAction(title: "Cancel", style: .default, handler: { (action) in
             completionHandler(nil)
         }))
-        self.present(alertController, animated: true, completion: nil)
+        presentPanel(alertController)
+    }
+
+    // WKUIDelegate method - window.open
+    func webView(_ webView: WKWebView,
+                 createWebViewWith configuration: WKWebViewConfiguration,
+                 for navigationAction: WKNavigationAction,
+                 windowFeatures: WKWindowFeatures) -> WKWebView?
+    {
+        Logger.info("Opening child web view: \(String(describing: navigationAction.request.url))")
+
+        // Built from the configuration WebKit handed us, which is what preserves the
+        // opener relationship. A child made from a fresh configuration would complete
+        // OAuth with no window.opener to post the credential back to.
+        let childWebView = WKWebView(frame: .zero, configuration: configuration)
+        childWebView.uiDelegate = self
+        // Deliberately no navigation delegate: this controller's policy handler sends
+        // unrecognised hosts to Safari, which would strand the popup mid-flow.
+        if #available(iOS 16.4, *) {
+            childWebView.isInspectable = true
+        }
+
+        let childCtrl = ChildWebViewCtrl(webView: childWebView) { [weak self] ctrl in
+            self?.closeChildWebViewCtrl(ctrl)
+        }
+        childWebViewCtrls.append(childCtrl)
+        present(childCtrl, animated: true)
+        // After present(), which is when the presentation controller exists.
+        childCtrl.presentationController?.delegate = self
+
+        // WebKit loads the request into the returned view itself.
+        return childWebView
+    }
+
+    // WKUIDelegate method - window.close, and what the Firebase auth handler calls once it
+    // has delivered the credential to its opener.
+    func webViewDidClose(_ webView: WKWebView) {
+        Logger.info("Child web view asked to close")
+        guard let childCtrl = childWebViewCtrls.first(where: { $0.childWebView === webView }) else {
+            return
+        }
+        closeChildWebViewCtrl(childCtrl)
+    }
+
+    private func closeChildWebViewCtrl(_ childCtrl: ChildWebViewCtrl) {
+        childCtrl.detach()
+        childWebViewCtrls.removeAll { $0 === childCtrl }
+        childCtrl.dismiss(animated: true)
+    }
+
+    // UIAdaptivePresentationControllerDelegate method - the child sheet swiped away.
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        guard let childCtrl = presentationController.presentedViewController as? ChildWebViewCtrl else {
+            return
+        }
+        childCtrl.detach()
+        childWebViewCtrls.removeAll { $0 === childCtrl }
     }
 
     // WKNavigationDelegate method
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        
+
         //Logger.info("navigationAction 0: \(String(describing: navigationAction.request.url?.absoluteString))")
-        
-        if navigationAction.request.url?.absoluteString == "about:blank" {
+
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.allow)
+            return
+        }
+
+        if url.absoluteString == "about:blank" {
             Logger.info("Allowing about:blank redirect")
             decisionHandler(.allow)
             return
         }
 
-        if navigationAction.request.url?.host == "dimx-world.firebaseapp.com" {
-            Logger.info("Allowing dimx-world.firebaseapp.com redirect")
-            decisionHandler(.allow)
+        guard let host = url.host else {
+            // mailto:, tel: and friends have no host and are not ours to render.
+            let scheme = url.scheme?.lowercased()
+            if scheme == "http" || scheme == "https" {
+                decisionHandler(.allow)
+            } else {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                decisionHandler(.cancel)
+            }
             return
         }
-        
-        if navigationAction.request.url == nil {
+
+        if WebViewCtrl.shouldStayInWebView(host) {
             decisionHandler(.allow)
             return
         }
 
-        let host = navigationAction.request.url!.host!
-        if host.contains("dimx.world") || host == "localhost" || host == "sergei-laptop" {
-            decisionHandler(.allow)
-            return
-        }
-
-        if host == "www.youtube.com" || host == "m.youtube.com" {
-            decisionHandler(.allow)
-            return
-        }
-
-        UIApplication.shared.open(navigationAction.request.url!, options: [:], completionHandler: nil)
+        Logger.info("Opening externally: \(url.absoluteString)")
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
         decisionHandler(.cancel)
     }
-    
+
+    static private func shouldStayInWebView(_ host: String) -> Bool {
+        if inAppHosts.contains(host) {
+            return true
+        }
+        // Matched with contains("dimx.world") before, which both let through any host
+        // merely mentioning the name and - the reason sign-in broke - missed
+        // dimx-world.firebaseapp.com, where the hyphen makes it a different string.
+        return host == "dimx.world" || host.hasSuffix(".dimx.world")
+    }
+
     func createSpinnerView(_ containerView: UIView) {
         spinnerView = WKWebView(frame: containerView.bounds)
         spinnerView.isOpaque = false
