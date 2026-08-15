@@ -63,6 +63,13 @@ class Renderer
     var textures: [Texture?] = []
     var materials: [Material?] = []
     var meshes: [Mesh?] = []
+
+    // Every material builds a pipeline state per pass, but the state depends only on
+    // the shader specialization (function constants), the vertex layout and the pass -
+    // never on which material asked for it. 500 instances of one model would otherwise
+    // compile the same handful of specializations 500 times over. Keyed and shared here
+    // for the renderer's lifetime, mirroring GlRenderer's mPrograms.
+    var pipelineStates: [Material.PipelineKey: MTLRenderPipelineState] = [:]
     var renderables: [Renderable?] = []
     var scenes: [Scene?] = []
 

@@ -20,7 +20,13 @@ class Mesh
     var morphTangents = false
     
     var vertexDescriptor = MTLVertexDescriptor()
-    
+
+    // Everything that defines vertexDescriptor, in a form that can be compared and
+    // hashed. Two meshes with the same attribute list, formats and stride produce
+    // identical descriptors and can therefore share a pipeline state - see
+    // Material.PipelineKey.
+    private(set) var vertexLayoutKey: [Int] = []
+
     var numVerts = 0
 
     static func initCallbacks() {
@@ -46,13 +52,16 @@ class Mesh
         for i in 0 ..< Mesh_numVertexAttributes(meshPtr) {
             let attrPtr = Mesh_vertexAttribute(meshPtr, i)
             let enumIdx = VertexAttribute_type(attrPtr)
-            vertexDescriptor.attributes[enumIdx].format = vertexFormatFromCore(VertexAttribute_elementType(attrPtr))
+            let format = vertexFormatFromCore(VertexAttribute_elementType(attrPtr))
+            vertexDescriptor.attributes[enumIdx].format = format
             vertexDescriptor.attributes[enumIdx].offset = offset
             vertexDescriptor.attributes[enumIdx].bufferIndex = VertexBufferIndex.VBIVertexBuffer.rawValue
+            vertexLayoutKey.append(contentsOf: [enumIdx, Int(format.rawValue), offset])
             offset += VertexAttribute_elementSize(attrPtr)
         }
         let vertSize = Mesh_vertexSize(meshPtr)
         vertexDescriptor.layouts[0].stride = vertSize; // only one buffer is in use
+        vertexLayoutKey.append(vertSize)
 
         if offset != vertSize {
             fatalError("Size of vertex attributes don't match. Offset [\(offset)] vertSize [\(vertSize)] ")

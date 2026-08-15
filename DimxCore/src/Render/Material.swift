@@ -82,6 +82,11 @@ class Material
         Renderer.instance.materials[id] = nil
     }
     
+    // Core forwards every material param write here, including names this renderer
+    // has no field for - a material can declare any parameter, and user JavaScript
+    // reaches this path through Material.setParam(name, value). An unknown name is
+    // therefore ordinary input, not a programming error: warn and ignore it, the way
+    // the GL renderer ignores a uniform whose location came back as -1.
     static func setTextureParam(_ id: Int, _ paramName: String, _ coreTex: UnsafeRawPointer) {
         let material = Renderer.instance.materials[id]!
         let texture = Renderer.instance.textures[Texture_nativeId(coreTex)]
@@ -94,7 +99,7 @@ class Material
         } else if paramName == "roughnessMap" {
             material.roughnessMap = texture
         } else {
-            fatalError("Unknown texture param name to update: [\(paramName)]")
+            Logger.warn("Ignoring unknown texture material param: [\(paramName)]")
         }
     }
 
@@ -105,7 +110,7 @@ class Material
         } else if paramName == "sdfText" {
             material.sdfText = value
         } else {
-            fatalError("Unknown bool param name to update: [\(paramName)]")
+            Logger.warn("Ignoring unknown bool material param: [\(paramName)]")
         }
     }
     
@@ -118,7 +123,7 @@ class Material
         } else if paramName == "roughness" {
             material.roughness = value
         } else {
-            fatalError("Unknown float param name to update: [\(paramName)]")
+            Logger.warn("Ignoring unknown float material param: [\(paramName)]")
         }
     }
     
@@ -131,7 +136,7 @@ class Material
         } else if paramName == "multColor" {
             material.multColor = value
         } else {
-            fatalError("Unknown vec4 param name to update: [\(paramName)]")
+            Logger.warn("Ignoring unknown vec4 material param: [\(paramName)]")
         }
     }
 
@@ -140,7 +145,7 @@ class Material
         if paramName == "uvTransform" {
             material.uvTransform = value
         } else {
-            fatalError("Unknown mat3 param name to update: [\(paramName)]")
+            Logger.warn("Ignoring unknown mat3 material param: [\(paramName)]")
         }
     }
 
@@ -191,19 +196,20 @@ class Material
         var shadowsFlag = false
         funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
         funcConsts.setConstantValue(&shadowsFlag, type: MTLDataType.bool, index: FunctionConstant.FCShadowsPass.rawValue)
-        defaultPipelineState = try! Renderer.instance.device.makeRenderPipelineState(descriptor: createPipelineStateDescr(funcConsts, mesh))
-        
+        defaultPipelineState = pipelineState(.defaultPass, mesh) { self.createPipelineStateDescr(funcConsts, mesh) }
+
         occlusonFlag = true
         funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
-        occlusionPipelineState = try! Renderer.instance.device.makeRenderPipelineState(descriptor: createPipelineStateDescr(funcConsts, mesh))
+        occlusionPipelineState = pipelineState(.occlusion, mesh) { self.createPipelineStateDescr(funcConsts, mesh) }
 
         occlusonFlag = false
         shadowsFlag = true
         funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
         funcConsts.setConstantValue(&shadowsFlag, type: MTLDataType.bool, index: FunctionConstant.FCShadowsPass.rawValue)
-        shadowsPipelineState = try! Renderer.instance.device.makeRenderPipelineState(descriptor: createPipelineStateDescr(funcConsts, mesh))
-        
-        shadowMapPipelineState = try! Renderer.instance.device.makeRenderPipelineState(descriptor: createShadowMapPipelineStateDescr(funcConsts, mesh))
+        shadowsPipelineState = pipelineState(.shadows, mesh) { self.createPipelineStateDescr(funcConsts, mesh) }
+
+        // Built with the shadows constants still set, as it always has been.
+        shadowMapPipelineState = pipelineState(.shadowMap, mesh) { self.createShadowMapPipelineStateDescr(funcConsts, mesh) }
         
         self.numSkelJoints = numSkelJoints
         if self.numSkelJoints > 0 {
@@ -334,6 +340,56 @@ class Material
         if stencilMode != .none {
             encoder.setStencilReferenceValue(stencilRefValue)
         }
+    }
+
+    // What a pipeline state is actually made of: the shader specialization it was
+    // compiled with, the vertex layout it reads, and the pass it belongs to. Nothing
+    // else about the material reaches the descriptor, so any two materials agreeing on
+    // these share one state.
+    //
+    // The vertex attribute function constants are not listed: they are set from the
+    // same attribute list that produced vertexLayout, so the layout already implies
+    // them. Nor are the colour/depth formats the descriptors read off the view - those
+    // are fixed for the lifetime of the device this cache belongs to.
+    struct PipelineKey: Hashable {
+        enum Pass {
+            case defaultPass, occlusion, shadows, shadowMap
+        }
+
+        let pass: Pass
+        let vertexLayout: [Int]
+        let morphEnabled: Bool
+        let morphNormals: Bool
+        let morphTangents: Bool
+        let baseColorMap: Bool
+        let normalMap: Bool
+        let metalnessMap: Bool
+        let roughnessMap: Bool
+        let sdfText: Bool
+    }
+
+    private func pipelineState(_ pass: PipelineKey.Pass,
+                               _ mesh: Mesh,
+                               _ makeDescriptor: () -> MTLRenderPipelineDescriptor) -> MTLRenderPipelineState
+    {
+        let key = PipelineKey(pass: pass,
+                              vertexLayout: mesh.vertexLayoutKey,
+                              morphEnabled: mesh.morphEnabled,
+                              morphNormals: mesh.morphNormals,
+                              morphTangents: mesh.morphTangents,
+                              baseColorMap: baseColorMap != nil,
+                              normalMap: normalMap != nil,
+                              metalnessMap: metalnessMap != nil,
+                              roughnessMap: roughnessMap != nil,
+                              sdfText: sdfText)
+
+        if let cached = Renderer.instance.pipelineStates[key] {
+            return cached
+        }
+
+        let state = try! Renderer.instance.device.makeRenderPipelineState(descriptor: makeDescriptor())
+        Renderer.instance.pipelineStates[key] = state
+        return state
     }
 
     func createPipelineStateDescr(_ funcConsts: MTLFunctionConstantValues, _ mesh: Mesh) -> MTLRenderPipelineDescriptor {
