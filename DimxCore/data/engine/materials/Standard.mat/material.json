@@ -6,7 +6,7 @@
     "parameters": {
         "baseColor": {
             "type": "Color",
-            "default_value": "1 1 1 1",
+            "default_value": [1, 1, 1, 1],
             "gl_uniform": "fBaseColor",
             "editable": true
         },
@@ -73,14 +73,22 @@
         },
         "addColor": {
             "type": "Vec4",
-            "default_value": "0 0 0 0",
+            "default_value": [0, 0, 0, 0],
             "gl_uniform": "fAddColor",
             "editable": false
         },
         "multColor": {
             "type": "Vec4",
-            "default_value": "1 1 1 1",
+            "default_value": [1, 1, 1, 1],
             "gl_uniform": "fMultColor",
+            "editable": false
+        },
+        "uvTransform": {
+            "type": "Mat3",
+            "default_value": [1, 0, 0,
+                              0, 1, 0,
+                              0, 0, 1],
+            "gl_uniform": "vUvTransform",
             "editable": false
         }
     }

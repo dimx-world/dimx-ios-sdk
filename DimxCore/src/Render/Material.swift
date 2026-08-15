@@ -30,7 +30,9 @@ class Material
     
     var addColor = vector_float4(0, 0, 0, 0)
     var multColor = vector_float4(1, 1, 1, 1)
-    
+
+    var uvTransform = matrix_identity_float3x3
+
     var highlightFactor = Float(0.0)
 
     var transparent = false
@@ -63,6 +65,11 @@ class Material
         g_swiftMaterial().pointee.setVec4Param = {
             (id: Int, paramName: UnsafePointer<CChar>!, x: Float, y: Float, z: Float, w: Float) -> () in
                 Material.setVec4Param(id, String(cString: paramName), vector_float4(x, y, z, w))
+        }
+
+        g_swiftMaterial().pointee.setMat3Param = {
+            (id: Int, paramName: UnsafePointer<CChar>!, value: simd_float3x3) -> () in
+                Material.setMat3Param(id, String(cString: paramName), value)
         }
     }
 
@@ -127,7 +134,16 @@ class Material
             fatalError("Unknown vec4 param name to update: [\(paramName)]")
         }
     }
-    
+
+    static func setMat3Param(_ id: Int, _ paramName: String, _ value: matrix_float3x3) {
+        let material = Renderer.instance.materials[id]!
+        if paramName == "uvTransform" {
+            material.uvTransform = value
+        } else {
+            fatalError("Unknown mat3 param name to update: [\(paramName)]")
+        }
+    }
+
     func initData(_ coreMat: UnsafeRawPointer, _ mesh: Mesh, _ numSkelJoints: Int) {
         transparent = Material_transparent(coreMat)
 
@@ -157,6 +173,10 @@ class Material
         let roughnessTexPtr = Material_getTexture(coreMat, "roughnessMap")
         if roughnessTexPtr != nil {
             roughnessMap = Renderer.instance.textures[Texture_nativeId(roughnessTexPtr!)]
+        }
+
+        if Material_hasParam(coreMat, "uvTransform") {
+            Material_getParamMat3(coreMat, "uvTransform", &uvTransform)
         }
 
         receiveLighting = Material_getParamBool(coreMat, "receiveLighting")
@@ -215,6 +235,7 @@ class Material
        
         vertUniforms.vModelMat = renderable.nodeTransform()
         vertUniforms.vNormalMat = renderable.nodeNormalTransform()
+        vertUniforms.vUvTransform = uvTransform
 
         if morphEnabled {
             vertUniforms.vNumMeshVerts = numMeshVerts

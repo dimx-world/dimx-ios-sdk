@@ -211,7 +211,7 @@ vertex StandardVertexOut standard_vertex(StandardVertexIn in [[stage_in]],
         out.normal = normalize(float3(modelMat * float4(normal, 0)));
     }
     if (VATexCoord) {
-        out.texCoords = in.vTexCoord;
+        out.texCoords = (uniforms.vUvTransform * float3(in.vTexCoord, 1.0)).xy;
     }
     if (VAColor) {
         out.color = in.vColor;

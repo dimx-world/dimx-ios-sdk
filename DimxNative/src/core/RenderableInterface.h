@@ -1,6 +1,8 @@
 #ifndef RENDERABLE_INTERFACE_H_INCLUDED
 #define RENDERABLE_INTERFACE_H_INCLUDED
 
+#include <simd/simd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -16,7 +18,7 @@ bool Renderable_occlusion(const void* ptr);
 bool Renderable_shadowPass(const void* ptr);
 
 void Renderable_nodeTransform(const void* ptr, void* outBuf);
-void Renderable_nodeNormalTransform(const void* ptr, void* outBuf);
+void Renderable_nodeNormalTransform(const void* ptr, simd_float3x3* out);
 
 long Renderable_numSkeJoints(const void* ptr);
 const void* Renderable_jointTransforms(const void* ptr);

@@ -19,6 +19,11 @@ struct StandardVertexUniforms {
     matrix_float3x3 vNormalMat;
     matrix_float4x4 vLightSpaceMat;
 
+    // Affine texture-coordinate transform, applied as uv' = (M * float3(uv, 1)).xy.
+    // Materials that declare a "uvTransform" Mat3 parameter drive it; the rest keep
+    // the identity Material seeds it with.
+    matrix_float3x3 vUvTransform;
+
     int   vNumMeshVerts;
     int   vMorphTargetInds[METAL_MAX_MORPH_TARGETS_BLEND];
     float vMorphTargetWeights[METAL_MAX_MORPH_TARGETS_BLEND];

@@ -44,7 +44,9 @@ import {Vec2} from './lib/math/Vec2.js';
 import {Vec3} from './lib/math/Vec3.js';
 import {Vec4} from './lib/math/Vec4.js';
 import {Quat} from './lib/math/Quat.js';
+import {Mat3} from './lib/math/Mat3.js';
 import {Mat4} from './lib/math/Mat4.js';
+import {MathUtils} from './lib/math/MathUtils.js';
 import {Transform} from './lib/math/Transform.js';
 import {Ray} from './lib/math/Ray.js';
 
@@ -52,7 +54,7 @@ import {Ray} from './lib/math/Ray.js';
 export * from 'dimx-cpp';
 
 // Math helpers (these shadow any same-named re-exports from dimx-cpp — intended).
-export {Vec2, Vec3, Vec4, Quat, Mat4, Transform, Ray};
+export {Vec2, Vec3, Vec4, Quat, Mat3, Mat4, Transform, Ray, MathUtils};
 
 if (!globalThis.contentFactory) {
     globalThis.contentFactory = new ContentFactory();

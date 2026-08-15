@@ -40,6 +40,7 @@ struct StandardVertexUniforms {
     matrix_float4x4 vModelMat;
     matrix_float3x3 vNormalMat;
     matrix_float4x4 vLightSpaceMat;
+    matrix_float3x3 vUvTransform;
 
     int   vNumMeshVerts;
     int   vMorphTargetInds[METAL_MAX_MORPH_TARGETS_BLEND];

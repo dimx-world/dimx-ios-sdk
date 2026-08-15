@@ -1,4 +1,5 @@
 #include "MaterialInterface.h"
+#include "SimdConvert.h"
 #include <render/Material.h>
 #include <render/NativeMaterial.h>
 #include <ecs/Object.h>
@@ -42,6 +43,11 @@ void Material_getParamVec4(const void* ptr, const char* key, void* outBuf)
 {
     Vec4 tmp = reinterpret_cast<const Material*>(ptr)->getValue<Vec4>(key);
     memcpy(outBuf, &tmp, sizeof(Vec4));
+}
+
+void Material_getParamMat3(const void* ptr, const char* key, simd_float3x3* out)
+{
+    *out = toSimd(reinterpret_cast<const Material*>(ptr)->getValue<Mat3>(key));
 }
 
 long Material_stencilMode(const void* ptr)

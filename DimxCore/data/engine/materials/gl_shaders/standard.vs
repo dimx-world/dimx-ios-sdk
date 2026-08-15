@@ -35,6 +35,14 @@ uniform mat4 vModelMat;
 uniform mat3 vNormalMat;
 uniform mat4 vLightSpaceMat;
 
+#ifdef VA_vTexCoord
+// Affine texture-coordinate transform, applied as uv' = (M * vec3(uv, 1)).xy.
+// GLSL ES forbids uniform initializers and a mat3 uniform defaults to all zeros,
+// so GlMaterial seeds this with identity every draw; materials override it by
+// declaring a "uvTransform" Mat3 parameter bound to this uniform.
+uniform mat3 vUvTransform;
+#endif
+
 #if defined(VA_vJointIndex) || defined(VA_vJointIndices4)
 uniform mat4 vJointTransforms[96]; // MAX_JOINTS
 #endif
@@ -130,7 +138,7 @@ void main()
 #endif
 
 #ifdef VA_vTexCoord
-    fTexCoord = vec2(vTexCoord.x, vTexCoord.y);
+    fTexCoord = (vUvTransform * vec3(vTexCoord, 1.0)).xy;
 #endif
 
     gl_Position = fPosition;

@@ -1,6 +1,8 @@
 #ifndef IOS_MATERIAL_H_INCLUDED
 #define IOS_MATERIAL_H_INCLUDED
 
+#include <simd/simd.h>
+
 //---------------------------------------------------------------
 #ifdef __cplusplus
 extern "C" {
@@ -13,6 +15,7 @@ struct SwiftMaterial
     void (*setBoolParam)(long, const char*, bool);
     void (*setFloatParam)(long, const char*, float);
     void (*setVec4Param)(long, const char*, float, float, float, float);
+    void (*setMat3Param)(long, const char*, simd_float3x3);
 };
 struct SwiftMaterial* g_swiftMaterial();
 #ifdef __cplusplus

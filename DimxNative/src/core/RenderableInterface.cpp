@@ -1,4 +1,5 @@
 #include "RenderableInterface.h"
+#include "SimdConvert.h"
 #include <render/Renderable.h>
 #include <render/NativeRenderable.h>
 
@@ -43,10 +44,9 @@ void Renderable_nodeTransform(const void* ptr, void* outBuf)
     memcpy(outBuf, &tmp, sizeof(Mat4));
 }
 
-void Renderable_nodeNormalTransform(const void* ptr, void* outBuf)
+void Renderable_nodeNormalTransform(const void* ptr, simd_float3x3* out)
 {
-    const Mat3& tmp = reinterpret_cast<const Renderable*>(ptr)->nodeNormalTransform();
-    memcpy(outBuf, &tmp, sizeof(Mat3));
+    *out = toSimd(reinterpret_cast<const Renderable*>(ptr)->nodeNormalTransform());
 }
 
 long Renderable_numSkeJoints(const void* ptr)
