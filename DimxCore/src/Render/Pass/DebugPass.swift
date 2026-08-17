@@ -43,11 +43,11 @@ class DebugPass
         let defaultLibrary = renderer.getLibrary()
         let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
         pipelineStateDescriptor.label = "DebugPipeline"
-        //pipelineStateDescriptor.sampleCount = renderer.view.sampleCount
+        //pipelineStateDescriptor.sampleCount = renderer.sampleCount
         pipelineStateDescriptor.vertexFunction = defaultLibrary.makeFunction(name: "debug_vertex")!
         pipelineStateDescriptor.fragmentFunction = defaultLibrary.makeFunction(name: "debug_fragment")!
         pipelineStateDescriptor.vertexDescriptor = vertexDescriptor
-        pipelineStateDescriptor.colorAttachments[0].pixelFormat = renderer.view.colorPixelFormat
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = renderer.colorPixelFormat
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperation.add
         pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperation.add
@@ -55,8 +55,8 @@ class DebugPass
         pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.sourceAlpha
         pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
         pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
-        pipelineStateDescriptor.depthAttachmentPixelFormat = renderer.view.depthStencilPixelFormat
-        pipelineStateDescriptor.stencilAttachmentPixelFormat = renderer.view.depthStencilPixelFormat
+        pipelineStateDescriptor.depthAttachmentPixelFormat = renderer.depthStencilPixelFormat
+        pipelineStateDescriptor.stencilAttachmentPixelFormat = renderer.depthStencilPixelFormat
         do { try pipelineState = renderer.device.makeRenderPipelineState(descriptor: pipelineStateDescriptor) }
         catch let error { Logger.error("Failed to create debug lines pipeline state, error \(error)") }
     }

@@ -36,7 +36,7 @@ class ImGuiPass
         pipelineStateDescriptor.vertexFunction = defaultLibrary.makeFunction(name: "imgui_vertex")
         pipelineStateDescriptor.fragmentFunction = defaultLibrary.makeFunction(name: "imgui_fragment")
         pipelineStateDescriptor.vertexDescriptor = vertDesc
-        pipelineStateDescriptor.colorAttachments[0].pixelFormat = renderer.view.colorPixelFormat
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = renderer.colorPixelFormat
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperation.add
         pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperation.add
@@ -44,8 +44,8 @@ class ImGuiPass
         pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.sourceAlpha
         pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
         pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
-        pipelineStateDescriptor.depthAttachmentPixelFormat = renderer.view.depthStencilPixelFormat
-        pipelineStateDescriptor.stencilAttachmentPixelFormat = renderer.view.depthStencilPixelFormat
+        pipelineStateDescriptor.depthAttachmentPixelFormat = renderer.depthStencilPixelFormat
+        pipelineStateDescriptor.stencilAttachmentPixelFormat = renderer.depthStencilPixelFormat
         
         pipelineState2D = try! renderer.device.makeRenderPipelineState(descriptor: pipelineStateDescriptor)
 

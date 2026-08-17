@@ -129,8 +129,15 @@ void main()
     fLightSpacePos = vLightSpaceMat * fWorldPosition;
 
 #ifdef VA_vNormal
-    //fNormal = vNormalMat * vNormal;
+  #if defined(VA_vJointIndex) || defined(VA_vJointIndices4)
+    // Skinning folds per-vertex joint transforms into modelMat, so the normal
+    // matrix genuinely varies per vertex here and cannot be precomputed.
     fNormal = normalize(transpose(inverse(mat3(modelMat))) * normal);
+  #else
+    // Static geometry: modelMat is the same for every vertex, so the engine
+    // uploads the normal matrix once per draw instead of inverting per vertex.
+    fNormal = normalize(vNormalMat * normal);
+  #endif
 #endif
 
 #ifdef VA_vColor

@@ -398,8 +398,8 @@ class Material
         pipelineStateDescriptor.vertexFunction = try! defaultLibrary.makeFunction(name: "standard_vertex", constantValues: funcConsts)
         pipelineStateDescriptor.fragmentFunction = try! defaultLibrary.makeFunction(name: "standard_fragment", constantValues: funcConsts)
         pipelineStateDescriptor.vertexDescriptor = mesh.vertexDescriptor
-        //pipelineStateDescriptor.sampleCount = Renderer.instance.view.sampleCount // deprecated in ios 16.0
-        pipelineStateDescriptor.colorAttachments[0].pixelFormat = Renderer.instance.view.colorPixelFormat
+        //pipelineStateDescriptor.sampleCount = Renderer.instance.sampleCount // deprecated in ios 16.0
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = Renderer.instance.colorPixelFormat
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperation.add
         pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperation.add
@@ -407,8 +407,8 @@ class Material
         pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.sourceAlpha
         pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
         pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
-        pipelineStateDescriptor.depthAttachmentPixelFormat = Renderer.instance.view.depthStencilPixelFormat
-        pipelineStateDescriptor.stencilAttachmentPixelFormat = Renderer.instance.view.depthStencilPixelFormat
+        pipelineStateDescriptor.depthAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
+        pipelineStateDescriptor.stencilAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
         return pipelineStateDescriptor
     }
 
@@ -418,10 +418,10 @@ class Material
         pipelineStateDescriptor.vertexFunction = try! defaultLibrary.makeFunction(name: "standard_vertex", constantValues: funcConsts)
         pipelineStateDescriptor.fragmentFunction = nil
         pipelineStateDescriptor.vertexDescriptor = mesh.vertexDescriptor
-        //pipelineStateDescriptor.sampleCount = Renderer.instance.view.sampleCount // deprecated in ios 16.0
+        //pipelineStateDescriptor.sampleCount = Renderer.instance.sampleCount // deprecated in ios 16.0
         pipelineStateDescriptor.colorAttachments[0].pixelFormat = .invalid
-        pipelineStateDescriptor.depthAttachmentPixelFormat = Renderer.instance.view.depthStencilPixelFormat
-        //pipelineStateDescriptor.stencilAttachmentPixelFormat = Renderer.instance.view.depthStencilPixelFormat
+        pipelineStateDescriptor.depthAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
+        //pipelineStateDescriptor.stencilAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
         return pipelineStateDescriptor
     }
     

@@ -11,115 +11,133 @@ class CustomPanGestureRecognizer: UIPanGestureRecognizer {
   }
 }
 
-class ARViewCtrl: UIViewController, MTKViewDelegate, UITextInputTraits {
-    var initialUrl = ""
-    var initialSettingsData = ""
-    var initialAccountData = ""
+// The AR screen. The engine is neither created nor destroyed here and does not
+// stop when this controller goes away - all this screen does is lend the
+// renderer its layer and tell the engine when it is on top. See Context, which
+// owns the engine, and IOSEngine, which owns the update loop.
+class ARViewCtrl: UIViewController, UITextInputTraits {
+    // The session this screen was opened with, replayed on the way in the way
+    // AndEngine::onActivityResume replays its intent.
+    var pendingUrl = ""
+    var pendingSettingsData = ""
+    var pendingAccountData = ""
     var isCurrentlyVisible = false
     var mExtMediaStore = ExtMediaStore()
+
+    // Hides the layer's retained contents - the last frame of the previous
+    // session - from the moment this screen is put back up until a frame drawn
+    // by the new one is on screen. Without it, re-entering AR shows wherever you
+    // were last time until the first new frame lands.
+    private var staleFrameCover: UIView?
+    private var staleFrameCoverShownAt: CFTimeInterval = 0
+
+    var arView: ARView {
+        return view as! ARView
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         self.view = ARView()
 
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback)
-            try session.setActive(true)
-        } catch {
-            Logger.error("Error setting audio session category or activating audio session: \(error)")
-        }
-
-        initCallbacks();
-
-        let mtkView = self.view as! MTKView
-        mtkView.device = MTLCreateSystemDefaultDevice()
-        mtkView.delegate = self
-        mtkView.framebufferOnly = false
-        mtkView.colorPixelFormat = .rgba8Unorm // Set pixel format to RGBA. Default 80 = bgra8Unorm
-        Logger.info("Color pixel format: \(mtkView.colorPixelFormat.rawValue)")
-        //mtkView.depthStencilPixelFormat = .depth32Float
-        mtkView.depthStencilPixelFormat = .depth32Float_stencil8
-        mtkView.clearDepth = 1.0
-
-        Renderer.initSingleton(mtkView.device!, mtkView)
-
-        initAnalyticsInfo()
-
-        let libPath = try! FileManager.default.url(for: .libraryDirectory, in: .userDomainMask, appropriateFor: nil, create: false).path
-
-        Logger.info("SWIFT: initializing engine: \(initialUrl)")
-        initEngine(Context.inst().settings().appInstanceId(),
-                   Bundle.module.bundlePath.appending("/data"),
-                   libPath + "/LocalStorage",
-                   libPath + "/Caches",
-                   "ExtMedia",
-                   initialUrl,
-                   initialSettingsData,
-                   initialAccountData,
-                   Context.inst().appConfig().toJsonString())
-        
         //Adding notifies on keyboard appearing
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWasShown(_:)), name: UIResponder.keyboardWillShowNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillBeHidden(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
-        
+
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         NotificationCenter.default.addObserver(self, selector: #selector(orientationDidChange), name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
-    func initCallbacks() {
-        // Engine callbacks
-        g_swiftEngine().pointee.screenWidth = { [] () -> Int in return Int(Renderer.instance.viewportSize.width) }
-        g_swiftEngine().pointee.screenHeight = { () -> Int in return Int(Renderer.instance.viewportSize.height) }
-        g_swiftEngine().pointee.showKeyboard = { () -> Void in Context.inst().arViewCtrl().showKeyboard() }
-        g_swiftEngine().pointee.hideKeyboard = { () -> Void in Context.inst().arViewCtrl().hideKeyboard() }
-        g_swiftEngine().pointee.showAppScreen = { (url: UnsafePointer<CChar>!) -> Void in Context.inst().showAppScreen(String(cString: url)) }
-        g_swiftEngine().pointee.openUrlExternal = { (url: UnsafePointer<CChar>!) -> Void in Context.inst().arViewCtrl().openUrlExternal(String(cString: url)) }
-        g_swiftEngine().pointee.requestGeolocationUpdate = { () -> Void in Context.inst().arViewCtrl().requestGeolocationUpdate() }
-        g_swiftEngine().pointee.moveToExtMediaFile = { (src: UnsafePointer<CChar>!, dst: UnsafePointer<CChar>!) -> Void in Context.inst().arViewCtrl().moveToExtMediaFile(String(cString: src), String(cString: dst)) }
-        g_swiftEngine().pointee.shareExtMediaFile = { (args: UnsafePointer<CChar>!) -> Void in Context.inst().arViewCtrl().shareExtMediaFile(String(cString: args)) }
-        
-        Renderer.initCallbacks()
-        DeviceAR.initCallbacks()
-        AnchorSession.initCallbacks()
-        Texture.initCallbacks()
-        Material.initCallbacks()
-        Mesh.initCallbacks()
-        Renderable.initCallbacks()
-    }
-
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-//        let configuration = ARWorldTrackingConfiguration()
-//        configuration.planeDetection = .horizontal
-//        session.run(configuration)
+        Context.inst().refreshInterfaceOrientation()
+
+        // Up before the layer is handed over, so there is no window in which the
+        // old contents can be composited.
+        showStaleFrameCover()
+
+        // Hand the renderer the layer before the engine is told it has one.
+        arView.setNeedsLayout()
+        arView.layoutIfNeeded()
+        Renderer.instance.attachLayer(arView.metalLayer) { [weak self] in
+            self?.hideStaleFrameCover()
+        }
+        engineSetSurfaceAttached(true)
     }
-    
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        DeviceAR.instance.pauseSession()
+
+    private func showStaleFrameCover() {
+        guard staleFrameCover == nil else { return }
+
+        let cover = UIView(frame: view.bounds)
+        cover.backgroundColor = .black
+        cover.isOpaque = true
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        // Purely visual: it must never eat a touch, however briefly it is up.
+        cover.isUserInteractionEnabled = false
+        view.addSubview(cover)
+        staleFrameCover = cover
+        staleFrameCoverShownAt = CACurrentMediaTime()
     }
-    
+
+    private func hideStaleFrameCover() {
+        guard let cover = staleFrameCover else { return }
+
+        // DIAGNOSTIC: how long the black cover was up, i.e. how long the stale
+        // frame would have been visible without it. Remove with the others.
+        let heldMs = (CACurrentMediaTime() - staleFrameCoverShownAt) * 1000
+        Logger.info(String(format: "ARViewCtrl: stale-frame cover lifted after %.1f ms", heldMs))
+
+        cover.removeFromSuperview()
+        staleFrameCover = nil
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         isCurrentlyVisible = true
         UIApplication.shared.isIdleTimerDisabled = true
+
+        engineSetScreenVisible(true)
+        onScreenResume()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isCurrentlyVisible = false
+
+        // Off the screen first, then the layer: the loop leaves live mode on its
+        // next iteration and stops drawing on its own.
+        engineSetScreenVisible(false)
+        engineSetSurfaceAttached(false)
+        Renderer.instance.detachLayer()
+
+        // detachLayer dropped the callback that would have taken this down, so
+        // leaving before the first frame landed would otherwise strand it.
+        hideStaleFrameCover()
+
+        DeviceAR.instance.pauseSession()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        isCurrentlyVisible = false
         UIApplication.shared.isIdleTimerDisabled = false
     }
-    
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-//        renderer.drawRectResized(size: size)
-    }
-    
-    func draw(in view: MTKView) {
-        updateEngine()
+
+    // The AR screen coming up, whether that is a fresh presentation or the app
+    // returning to the foreground with it still on top. Mirrors what Android
+    // does from onActivityResume.
+    func onScreenResume() {
+        let url = pendingUrl
+        let settingsData = pendingSettingsData
+        let accountData = pendingAccountData
+
+        // Consumed once. A later resume reloads the session without replaying
+        // the url that opened it.
+        pendingUrl = ""
+        pendingSettingsData = ""
+        pendingAccountData = ""
+
+        Logger.info("ARViewCtrl: screen resume, session url [\(url)]")
+        Context.inst().reloadARSession(url, settingsData, accountData)
     }
 /*
     static func showAR(_ url: String, _ settingsData: String, _ accountData: String) {
@@ -140,31 +158,6 @@ class ARViewCtrl: UIViewController, MTKViewDelegate, UITextInputTraits {
         ARViewCtrl.instance!.navigationController!.popViewController(animated: true)
     }
 */
-    func openUrlExternal(_ urlString: String) {
-        if let url = URL(string: urlString) {
-            if UIApplication.shared.canOpenURL(url) {
-                UIApplication.shared.open(url, options: [:], completionHandler: nil)
-            } else {
-                Logger.error("Unable to open external  URL: \(urlString)")
-            }
-        } else {
-            Logger.error("Invalid external URL: \(urlString)")
-        }
-    }
-
-    func initAnalyticsInfo() {
-        AnalyticsManager_setOSVersion(UIDevice.current.systemVersion)
-        
-        var systemInfo = utsname()
-        uname(&systemInfo)
-        let deviceModel = withUnsafePointer(to: &systemInfo.machine) {
-            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
-                ptr in String.init(validatingUTF8: ptr)
-            }
-        }
-        AnalyticsManager_setDeviceModel(deviceModel)
-    }
-
     func showKeyboard() {
         if (!view.isFirstResponder) {
             view.becomeFirstResponder()
@@ -192,16 +185,11 @@ class ARViewCtrl: UIViewController, MTKViewDelegate, UITextInputTraits {
         setKeyboardTop(0.0); // 0.0 is a special value
     }
     
-    @objc func appWillEnterForeground() {
-        if isCurrentlyVisible {
-            print("ARViewCtrl: app will enter foreground!")
-            // session.run()
-            //reloadEngineSession("", "", "")
-            Context.inst().reloadARSession("", "", "")
-        }
-    }
-    
     @objc func orientationDidChange(notification: NSNotification) {
+        // The engine thread reads the interface orientation every frame and must
+        // not ask UIKit for it, so refresh the cached value here even though the
+        // resize itself is still ignored.
+        Context.inst().refreshInterfaceOrientation()
         Logger.info("ARViewCtrl: orientation change ignored.")
 /*
         guard let deviceOrientation = UIDevice.current.orientation as UIDeviceOrientation? else {
@@ -219,10 +207,6 @@ class ARViewCtrl: UIViewController, MTKViewDelegate, UITextInputTraits {
         
         Renderer.instance.backgroundPass.setViewportChanged()
 */
-    }
-    
-    func requestGeolocationUpdate() {
-        Context.inst().locationManager().onRequestGeolocatinUpdate()
     }
     
     func moveToExtMediaFile(_ src: String, _ dst: String) {

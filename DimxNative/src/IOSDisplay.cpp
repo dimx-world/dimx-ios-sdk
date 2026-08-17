@@ -22,7 +22,10 @@ void IOSDisplay::initialize(const Config& config)
     Display::initialize(config);
 
 
-    Vec2i size { (int)g_swiftEngine()->screenWidth(), (int)g_swiftEngine()->screenHeight() };
+    // Seeded from UIScreen at initEngine, not from the drawable: the display is
+    // initialized long before any AR screen exists to hand the renderer a layer.
+    // A layer that ends up a different size reports it through Display_setSize.
+    Vec2i size { g_iosEngine().screenWidth(), g_iosEngine().screenHeight() };
     LOGI("IOSDisplay size: " << size.x << " x " << size.y);
     setSize(size.x, size.y);
 }

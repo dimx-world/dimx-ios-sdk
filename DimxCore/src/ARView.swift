@@ -71,18 +71,44 @@ class TouchListener {
     }
 }
 
-class ARView: MTKView, UIKeyInput
+// A plain CAMetalLayer-backed view. It used to be an MTKView, whose display link
+// was the engine's entire update loop and stopped the moment the view left the
+// window. The loop now lives on the engine thread (see IOSEngine); all this view
+// does is lend the renderer a layer to draw into.
+class ARView: UIView, UIKeyInput
 {
     let touchListener = TouchListener()
-    
-    override init(frame frameRect: CGRect, device: MTLDevice?) {
-        super.init(frame: frameRect, device: device)
+
+    override class var layerClass: AnyClass {
+        return CAMetalLayer.self
+    }
+
+    var metalLayer: CAMetalLayer {
+        return layer as! CAMetalLayer
+    }
+
+    override init(frame frameRect: CGRect) {
+        super.init(frame: frameRect)
         isMultipleTouchEnabled = true
     }
 
-    required init(coder: NSCoder) {
+    required init?(coder: NSCoder) {
         super.init(coder: coder)
         isMultipleTouchEnabled = true
+    }
+
+    // The engine thread must never touch the layer to find out how big it is, so
+    // the size is pushed to the renderer from here, where it is known.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        let scale = window?.screen.scale ?? UIScreen.main.scale
+        let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        guard size.width > 0 && size.height > 0 else { return }
+
+        metalLayer.contentsScale = scale
+        metalLayer.drawableSize = size
+        Renderer.instance.setViewportSize(size)
     }
 
     var hasText: Bool {

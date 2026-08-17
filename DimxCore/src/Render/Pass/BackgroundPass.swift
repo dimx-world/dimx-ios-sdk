@@ -18,7 +18,13 @@ class BackgroundPass
     var textureCbCr: MTLTexture!
     var textureCache: CVMetalTextureCache!
     
-    var viewportSizeDidChange = true;
+    // Requested from the main thread (the AR screen pausing the session, an
+    // orientation change), acted on by the engine thread at the top of a frame.
+    // The textures themselves belong to the engine thread and are never touched
+    // from anywhere else.
+    private let flagsLock = NSLock()
+    private var viewportSizeDidChange = true
+    private var resetRequested = false
 
     init(_ renderer: Renderer) {
         vertexBuffer = renderer.device.makeBuffer(bytes: planeVertexData, length: planeVertexData.count * MemoryLayout<Float>.size, options: [])
@@ -37,13 +43,13 @@ class BackgroundPass
         let defaultLibrary = renderer.getLibrary()
         let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
         pipelineStateDescriptor.label = "VideoBackgroundPipeline"
-        //pipelineStateDescriptor.sampleCount = renderer.view.sampleCount
+        //pipelineStateDescriptor.sampleCount = renderer.sampleCount
         pipelineStateDescriptor.vertexFunction = defaultLibrary.makeFunction(name: "background_vertex")!
         pipelineStateDescriptor.fragmentFunction = defaultLibrary.makeFunction(name: "background_fragment")!
         pipelineStateDescriptor.vertexDescriptor = vertexDescriptor
-        pipelineStateDescriptor.colorAttachments[0].pixelFormat = renderer.view.colorPixelFormat
-        pipelineStateDescriptor.depthAttachmentPixelFormat = renderer.view.depthStencilPixelFormat
-        pipelineStateDescriptor.stencilAttachmentPixelFormat = renderer.view.depthStencilPixelFormat
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = renderer.colorPixelFormat
+        pipelineStateDescriptor.depthAttachmentPixelFormat = renderer.depthStencilPixelFormat
+        pipelineStateDescriptor.stencilAttachmentPixelFormat = renderer.depthStencilPixelFormat
         do { try pipelineState = renderer.device.makeRenderPipelineState(descriptor: pipelineStateDescriptor) }
         catch let error { Logger.error("Failed to created captured image pipeline state, error \(error)") }
 
@@ -68,21 +74,34 @@ class BackgroundPass
     }
     
     func renderFrame(_ encoder: MTLRenderCommandEncoder, _ frameContext: FrameContext, _ renderer: Renderer) {
+        flagsLock.lock()
+        let reset = resetRequested
+        let sizeChanged = viewportSizeDidChange
+        resetRequested = false
+        flagsLock.unlock()
+
+        if reset {
+            textureY = nil
+            textureCbCr = nil
+        }
+
         let currentFrame = DeviceAR.instance.currentFrame()
-        
+
         if currentFrame != nil {
             let pixelBuffer = currentFrame!.capturedImage
             if (CVPixelBufferGetPlaneCount(pixelBuffer) < 2) { fatalError("Invalid pixel buffer plane count") }
             textureY = createTexture(pixelBuffer, .r8Unorm, 0)!
             textureCbCr = createTexture(pixelBuffer, .rg8Unorm, 1)!
-            
-            if viewportSizeDidChange {
+
+            if sizeChanged {
                 // do once
+                flagsLock.lock()
                 viewportSizeDidChange = false
+                flagsLock.unlock()
                 updateImagePlane(currentFrame!, renderer)
             }
         }
-        
+
         guard textureY != nil && textureCbCr != nil else { return }
         encoder.pushDebugGroup("DrawCapturedImage")
         encoder.setCullMode(.none)
@@ -110,12 +129,17 @@ class BackgroundPass
         }
     }
     
-    func resetTexture() {
-        textureY = nil
-        textureCbCr = nil
+    // Both are safe from any thread; the work happens on the engine thread at the
+    // top of the next frame.
+    func requestReset() {
+        flagsLock.lock()
+        resetRequested = true
+        flagsLock.unlock()
     }
-    
+
     func setViewportChanged() {
+        flagsLock.lock()
         viewportSizeDidChange = true
+        flagsLock.unlock()
     }
 }

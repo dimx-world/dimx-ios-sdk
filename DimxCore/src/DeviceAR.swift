@@ -38,12 +38,17 @@ class DeviceAR: NSObject, ARSessionDelegate
     override private init() {}
     
     private let session = ARSession()
-    private var mCurrentFrame: ARFrame?
     private let configuration = ARWorldTrackingConfiguration()
     private let qrScanner = QRScanner()
 
+    // The engine no longer runs on the main thread, so everything shared with it
+    // needs a lock: frames and anchor updates arrive on ARKit's delegate queue
+    // (the main queue), while the engine thread reads them every frame and
+    // creates and deletes anchors from its own event handlers.
+    private let mSessionLock = NSLock()
+    private var mCurrentFrame: ARFrame?
     private var anchors = [AnchorInfo?]()
-    
+
     private var mCameraMinZ: Float = 0.0
     private var mCameraMaxZ: Float = 0.0
 
@@ -128,7 +133,13 @@ class DeviceAR: NSObject, ARSessionDelegate
         Logger.info("DeviceAR selected video format \(configuration.videoFormat.imageResolution) @ \(configuration.videoFormat.framesPerSecond)fps")
 
         session.delegate = self
-        session.run(configuration)
+
+        // Deliberately not run here. The engine is initialized with the app now,
+        // long before any AR screen exists; starting ARKit at that point would
+        // raise the camera permission prompt at launch and hold the camera open
+        // for a screen nobody has asked for. The AR screen starts the session
+        // when it appears, the same way Android resumes ARCore from
+        // onActivityResume.
 
         qrScanner.setEnabled(DeviceAR_qrScanEnabled())
     }
@@ -136,12 +147,18 @@ class DeviceAR: NSObject, ARSessionDelegate
     func postInit(configPtr: UnsafeRawPointer) {
     }
 
+    // Session control. Main thread only - it is driven by the AR screen's
+    // appearance and by Context.reloadARSession.
     func pauseSession() {
         session.pause()
+
+        mSessionLock.lock()
         mCurrentFrame = nil
+        mSessionLock.unlock()
+
         qrScanner.clearPending()
         if (Renderer.instance.backgroundPass != nil) {
-            Renderer.instance.backgroundPass.resetTexture()
+            Renderer.instance.backgroundPass.requestReset()
         }
     }
 
@@ -151,22 +168,23 @@ class DeviceAR: NSObject, ARSessionDelegate
         configuration.detectionImages.removeAll()
         session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     }
-    
+
     func preFrameUpdate(frameContextPtr: UnsafeRawPointer) {
-        if (mCurrentFrame != nil) {
-            var projMat = mCurrentFrame!.camera.projectionMatrix(for: Context.inst().getInterfaceOrientation(), viewportSize: Renderer.instance.viewportSize, zNear: CGFloat(mCameraMinZ), zFar: CGFloat(mCameraMaxZ))
-            Camera_setProjectionMat(&projMat)
-            var viewMat = mCurrentFrame!.camera.viewMatrix(for: Context.inst().getInterfaceOrientation())
-            Camera_setViewMat(&viewMat)
-        }
+        guard let frame = currentFrame() else { return }
+
+        let orientation = Context.inst().getInterfaceOrientation()
+        var projMat = frame.camera.projectionMatrix(for: orientation, viewportSize: Renderer.instance.viewportSize, zNear: CGFloat(mCameraMinZ), zFar: CGFloat(mCameraMaxZ))
+        Camera_setProjectionMat(&projMat)
+        var viewMat = frame.camera.viewMatrix(for: orientation)
+        Camera_setViewMat(&viewMat)
     }
 
     func inFrameUpdate(frameContextPtr: UnsafeRawPointer) {
-        if mCurrentFrame == nil {
+        guard let frame = currentFrame() else {
             return
         }
         if Settings_displayDebugLines() {
-            for anchor in mCurrentFrame!.anchors {
+            for anchor in frame.anchors {
                 if anchor.isKind(of: ARImageAnchor.self) {
                     let img = anchor as! ARImageAnchor
                     Renderer.instance.debugPass.drawRect(Float(img.referenceImage.physicalSize.width),
@@ -177,8 +195,8 @@ class DeviceAR: NSObject, ARSessionDelegate
             }
 
             if Settings_displayPointCloud() {
-                if mCurrentFrame!.rawFeaturePoints != nil {
-                    for point in mCurrentFrame!.rawFeaturePoints!.points {
+                if frame.rawFeaturePoints != nil {
+                    for point in frame.rawFeaturePoints!.points {
                         Renderer.instance.debugPass.drawPoint(point, 0.03, simd_float4(1.0, 1.0, 0.0, 1))
                     }
                 }
@@ -186,7 +204,7 @@ class DeviceAR: NSObject, ARSessionDelegate
 
             if Settings_displayDebugPlanes() {
                 var planeColorIdx = 0
-                for anchor in mCurrentFrame!.anchors {
+                for anchor in frame.anchors {
                     if anchor.isKind(of: ARPlaneAnchor.self) {
                         let plane = anchor as! ARPlaneAnchor
                         var color = g_colors[planeColorIdx % g_colors.count]
@@ -201,15 +219,21 @@ class DeviceAR: NSObject, ARSessionDelegate
         AnchorSession.instance.update()
     }
 
+    // A snapshot: ARKit replaces the frame on its delegate queue while the engine
+    // thread is using one, and ARFrame holds the pixel buffer the background pass
+    // is about to sample.
     func currentFrame() -> ARFrame? {
+        mSessionLock.lock()
+        defer { mSessionLock.unlock() }
         return mCurrentFrame
     }
-    
+
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        mSessionLock.lock()
         mCurrentFrame = frame
+        mSessionLock.unlock()
+
         qrScanner.handle(frame: frame, interfaceOrientation: Context.inst().getInterfaceOrientation())
-//        Logger.info("Hello")
-//        let currentTransform = frame.camera.transform
     }
 
     func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
@@ -241,6 +265,9 @@ class DeviceAR: NSObject, ARSessionDelegate
     }
     
     func processDetectedImage(imageAnchor: ARImageAnchor) {
+        mSessionLock.lock()
+        defer { mSessionLock.unlock() }
+
         for info in anchors {
             if info?.image?.hash == imageAnchor.referenceImage.hash {
                 info!.imageAnchor = imageAnchor
@@ -248,6 +275,15 @@ class DeviceAR: NSObject, ARSessionDelegate
                 info!.transform = imageAnchor.transform
                 break
             }
+        }
+    }
+
+    // ARSession mutation is main-thread work; these are all called from the
+    // engine thread, so the session call is handed over and only our own anchor
+    // bookkeeping - which is what the caller gets an id for - happens inline.
+    private func runSessionOnMain(_ body: @escaping (ARSession, ARWorldTrackingConfiguration) -> Void) {
+        DispatchQueue.main.async { [self] in
+            body(session, configuration)
         }
     }
 
@@ -293,48 +329,67 @@ class DeviceAR: NSObject, ARSessionDelegate
 
         image.name = String(cString: Marker_name(markerPtr))
 
+        mSessionLock.lock()
         let id = anchors.count
         anchors.append(AnchorInfo())
         anchors[id]?.image = image
         anchors[id]?.width = Marker_width(markerPtr)
         anchors[id]?.height = Marker_height(markerPtr)
-        
-        configuration.detectionImages.insert(image)
-        session.pause()
-        session.run(configuration/*, options: [.resetTracking, .removeExistingAnchors]*/)
+        mSessionLock.unlock()
+
+        runSessionOnMain { session, configuration in
+            configuration.detectionImages.insert(image)
+            session.pause()
+            session.run(configuration/*, options: [.resetTracking, .removeExistingAnchors]*/)
+        }
 
         return id
     }
-    
+
     func deleteMarker(id: Int) {
+        mSessionLock.lock()
         if id >= anchors.count {
+            mSessionLock.unlock()
             fatalError("Invalid image id - out of bounds")
         }
-        if anchors[id]?.image == nil {
+        guard let image = anchors[id]?.image else {
+            mSessionLock.unlock()
             fatalError("Marker already deleted")
         }
-
-        configuration.detectionImages.remove((anchors[id]?.image)!)
-        session.run(configuration)
-
         anchors[id] = nil
+        mSessionLock.unlock()
+
+        runSessionOnMain { session, configuration in
+            configuration.detectionImages.remove(image)
+            session.run(configuration)
+        }
     }
-    
+
     func createAnchor(_ transformPtr: UnsafeRawPointer) -> Int {
-        let id = anchors.count
-        anchors.append(AnchorInfo())
         var mat = simd_float4x4()
         Transform_matrix(transformPtr, &mat)
-        anchors[id]!.anchor = ARAnchor(transform: mat)
-        session.add(anchor: anchors[id]!.anchor!)
+        let anchor = ARAnchor(transform: mat)
+
+        mSessionLock.lock()
+        let id = anchors.count
+        anchors.append(AnchorInfo())
+        anchors[id]!.anchor = anchor
+        mSessionLock.unlock()
+
+        runSessionOnMain { session, _ in session.add(anchor: anchor) }
         return id
     }
-    
+
     func getAnchor(_ id: Int) -> AnchorInfo? {
+        mSessionLock.lock()
+        defer { mSessionLock.unlock() }
         return id < anchors.count ? anchors[id] : nil
     }
-    
+
     func getAnchorTracking(_ id: Int, _ outPtr: UnsafeMutableRawPointer) {
+        mSessionLock.lock()
+        defer { mSessionLock.unlock() }
+
         if id >= anchors.count {
             fatalError("Invalid image id - out of bounds")
         }
@@ -353,17 +408,22 @@ class DeviceAR: NSObject, ARSessionDelegate
         }
         //fatalError("Invalid anchor id")
     }
-    
+
     func deleteAnchor(_ id: Int) {
+        mSessionLock.lock()
         if id >= anchors.count {
+            mSessionLock.unlock()
             fatalError("Invalid image id - out of bounds")
         }
-        session.remove(anchor: anchors[id]!.anchor!)
+        let anchor = anchors[id]!.anchor!
         anchors[id] = nil
+        mSessionLock.unlock()
+
+        runSessionOnMain { session, _ in session.remove(anchor: anchor) }
     }
-    
+
     func scanQRCode(outBuffer: UnsafeMutableRawPointer, bufSize: Int) {
-        let pixelBuffer = mCurrentFrame?.capturedImage;
+        let pixelBuffer = currentFrame()?.capturedImage;
         if (pixelBuffer != nil) {
             CVPixelBufferLockBaseAddress(pixelBuffer!, CVPixelBufferLockFlags.readOnly)
             // The captured image comes in YCbCr format (also called YUV420)
@@ -378,6 +438,10 @@ class DeviceAR: NSObject, ARSessionDelegate
         }
     }
     
+    // The one ARSession call still made straight from the engine thread. It is a
+    // read-only query and has to return a result to the caller, so it cannot be
+    // handed to the main queue the way the mutations above are. See the note in
+    // the port write-up.
     func raycast(_ orig: simd_float3, _ dir: simd_float3, _ flags: UInt, _ outPtr: UnsafeMutableRawPointer) {
         let target = raycastStrategyFromCore(Settings_iosRaycastStrategy())
         let query = ARRaycastQuery(origin: orig, direction: dir, allowing: target, alignment: .any)

@@ -154,7 +154,7 @@ void IOSRenderer::beginFrame(const FrameContext& frameContext)
 void IOSRenderer::endFrame(const FrameContext& frameContext)
 {
     Renderer::endFrame(frameContext);
-    g_swiftRenderer()->endFrame();
+    mFramePresented = g_swiftRenderer()->endFrame();
 }
 
 void IOSRenderer::getFrameImageData(int width, int height, Buffer& outBuffer)

@@ -1,5 +1,10 @@
 {
-    "engine": {},
+    "engine": {
+        // Update rate the engine falls back to outside live mode - on mobile it
+        // keeps running with no screen attached. In live mode the display paces
+        // the loop instead.
+        "idle_fps": 5
+    },
 
     "threads": {
         "max_threads": 10

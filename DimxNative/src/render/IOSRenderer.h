@@ -11,7 +11,10 @@ struct SwiftRenderer
     void (*initialize)(const void*);
     void (*postInit)(const void*);
     void (*beginFrame)(const void*);
-    void (*endFrame)();
+    // Returns whether the frame actually reached the screen. A frame with no
+    // layer or no drawable is dropped, and the update loop must not mistake one
+    // for a presented frame - presenting is the only thing pacing it.
+    bool (*endFrame)();
     void (*getFrameImageData)(long, long, void*);
 
     long (*createScene)(const void*);
@@ -62,6 +65,15 @@ public:
     std::unique_ptr<NativeRenderable> createRenderable(const Renderable& coreRenderable) override;
     std::unique_ptr<NativeScene> createScene(const Scene& coreScene) override;
     void deleteScene(size_t id) override;
+
+    // Whether the last endFrame reached the screen. The update loop paces itself
+    // on a presented drawable, so it has to know this rather than infer it from
+    // live mode - a dropped frame leaves nothing to block on and would spin.
+    bool framePresented() const { return mFramePresented; }
+    void clearFramePresented() { mFramePresented = false; }
+
+private:
+    bool mFramePresented = false;
 };
 #endif // __cplusplus
 
