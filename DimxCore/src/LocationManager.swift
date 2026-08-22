@@ -12,6 +12,7 @@ import DimxNative
 
 class LocationManager: NSObject, CLLocationManagerDelegate {
     private let mManager = CLLocationManager()
+    private let mBeaconScanner = BeaconScanner()
     private var mLocation: CLLocation?
     private var mAuthCallback: ((Bool) -> Void)?
     
@@ -83,6 +84,10 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
                                      mLocation!.horizontalAccuracy,
                                      mLocation!.verticalAccuracy)
         }
+    }
+
+    func updateBeaconScanUuids(_ json: String) {
+        mBeaconScanner.updateUuids(json)
     }
     
     func requestPermission(_ callback: @escaping (Bool) -> Void) {

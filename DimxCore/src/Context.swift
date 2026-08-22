@@ -132,6 +132,10 @@ public class Context: NSObject
             // CLLocationManager belongs to the thread it was created on.
             DispatchQueue.main.async { Context.inst().locationManager().onRequestGeolocatinUpdate() }
         }
+        g_swiftEngine().pointee.updateBeaconScanUuids = { (rawUuids: UnsafePointer<CChar>!) -> Void in
+            let uuids = String(cString: rawUuids)
+            DispatchQueue.main.async { Context.inst().locationManager().updateBeaconScanUuids(uuids) }
+        }
         g_swiftEngine().pointee.moveToExtMediaFile = { (src: UnsafePointer<CChar>!, dst: UnsafePointer<CChar>!) -> Void in
             let src = String(cString: src)
             let dst = String(cString: dst)
