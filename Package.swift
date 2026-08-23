@@ -6,6 +6,46 @@ import PackageDescription
 
 let coreVersion = "0.0.6"
 
+// The engine: prebuilt xcframeworks - the ones the dimx-dev workspace builds
+// into Libs/ (`./dev ios`) when that directory exists, the published dxcore
+// archives otherwise. Libs/ is git-ignored and only the dev build creates it,
+// so its presence is the declaration of intent: a standalone checkout
+// resolves the published set. A Libs/ missing a framework fails in
+// resolution, with SwiftPM naming the absent artifact - never a silent
+// fallback to the published engine.
+//
+// Tooling re-evaluates this manifest when the file itself changes, not when
+// Libs/ appears - so the build that fills Libs/ also touches this file
+// (env/ios/build.sh), and a stubborn Xcode is cured once with
+// File > Packages > Reset Package Caches.
+
+let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+var libsIsDirectory: ObjCBool = false
+let useLocalEngine = FileManager.default.fileExists(
+    atPath: packageDir.appendingPathComponent("Libs").path,
+    isDirectory: &libsIsDirectory) && libsIsDirectory.boolValue
+
+let engineTargets: [Target]
+if useLocalEngine {
+    print("[DimxWorld] ENGINE: local xcframeworks from Libs/ (remove Libs/ to use the published dxcore \(coreVersion))")
+    engineTargets = [
+        .binaryTarget(name: "dimx-core", path: "Libs/dimx-core.xcframework"),
+        .binaryTarget(name: "dimx-net", path: "Libs/dimx-net.xcframework"),
+        .binaryTarget(name: "dimx-vision", path: "Libs/dimx-vision.xcframework"),
+        .binaryTarget(name: "dxaudio", path: "Libs/dxaudio.xcframework"),
+        .binaryTarget(name: "dxvideo", path: "Libs/dxvideo.xcframework"),
+    ]
+} else {
+    print("[DimxWorld] ENGINE: published dxcore \(coreVersion) from dl.dimx.world (no Libs/ directory)")
+    engineTargets = [
+        .binaryTarget(name: "dimx-core", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-core.xcframework.zip", checksum: "2a00049b90bf652064f3c4c5180907c2536af7f42219de56cfcd405240dbfd38"),
+        .binaryTarget(name: "dimx-net", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-net.xcframework.zip", checksum: "2f1b40d9a3e94ca16b29354295c84892e6bddfb8508dad48dc3cc79f41b32e8c"),
+        .binaryTarget(name: "dimx-vision", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-vision.xcframework.zip", checksum: "4720cd934e3d4275f0db462e6a4fa1377a7c2c17f0942d9417e428ed931cc9db"),
+        .binaryTarget(name: "dxaudio", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dxaudio.xcframework.zip", checksum: "d4146e340a7c3768f3e085074ad96243a3990ceb6a017558053677ed218329f6"),
+        .binaryTarget(name: "dxvideo", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dxvideo.xcframework.zip", checksum: "8f1819b7c7e673ad8bab1f74b388312e3a36a33587d339a4a064ba30136cd310"),
+    ]
+}
+
 let package = Package(
     name: "DimxWorld",
     platforms: [
@@ -73,18 +113,6 @@ let package = Package(
                 .linkedLibrary("iconv")
             ]
         ),
-/*
-        .binaryTarget(name: "dimx-core", path: "Libs/dimx-core.xcframework"),
-        .binaryTarget(name: "dimx-net", path: "Libs/dimx-net.xcframework"),
-        .binaryTarget(name: "dimx-vision", path: "Libs/dimx-vision.xcframework"),
-        .binaryTarget(name: "dxaudio", path: "Libs/dxaudio.xcframework"),
-        .binaryTarget(name: "dxvideo", path: "Libs/dxvideo.xcframework"),
-*/
-        .binaryTarget(name: "dimx-core", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-core.xcframework.zip", checksum: "2a00049b90bf652064f3c4c5180907c2536af7f42219de56cfcd405240dbfd38"),
-        .binaryTarget(name: "dimx-net", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-net.xcframework.zip", checksum: "2f1b40d9a3e94ca16b29354295c84892e6bddfb8508dad48dc3cc79f41b32e8c"),
-        .binaryTarget(name: "dimx-vision", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-vision.xcframework.zip", checksum: "4720cd934e3d4275f0db462e6a4fa1377a7c2c17f0942d9417e428ed931cc9db"),
-        .binaryTarget(name: "dxaudio", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dxaudio.xcframework.zip", checksum: "d4146e340a7c3768f3e085074ad96243a3990ceb6a017558053677ed218329f6"),
-        .binaryTarget(name: "dxvideo", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dxvideo.xcframework.zip", checksum: "8f1819b7c7e673ad8bab1f74b388312e3a36a33587d339a4a064ba30136cd310"),
 
         .binaryTarget(name: "quickjspp", url: "https://dl.dimx.world/sdk/ios/quickjs/0.15.1/qjs.xcframework.zip", checksum: "8b45145b77941f6ad33696f394a0693db5f284a53bc26e8e2d10a3eeaf0445f0"),
         .binaryTarget(name: "jsoncpp", url: "https://dl.dimx.world/sdk/ios/jsoncpp/1.9.8/jsoncpp.xcframework.zip", checksum: "47df558f01eba46f31993bf1058a0c7d7d6f2b1cecc5b50b3c3ce6d1813685b5"),
@@ -99,6 +127,6 @@ let package = Package(
         .binaryTarget(name: "avutil", url: "https://dl.dimx.world/sdk/ios/ffmpeg/9.0/avutil.xcframework.zip", checksum: "fe319f0236e5ad03a8f1b6a3a8ba8fd5c332c7c8f267a27d497ffb3fc2a78b75"),
         .binaryTarget(name: "swresample", url: "https://dl.dimx.world/sdk/ios/ffmpeg/9.0/swresample.xcframework.zip", checksum: "8a982fa01b9efdcdf5b8a5294402516766376f52855976cde5cf7cbbf5c9edc7"),
         .binaryTarget(name: "swscale", url: "https://dl.dimx.world/sdk/ios/ffmpeg/9.0/swscale.xcframework.zip", checksum: "2f5dd92d026d25fa37c5ec1a62389301f94deaa9a546dc38a992132e177d2c3d"),
-    ],
+    ] + engineTargets,
     cxxLanguageStandard: .cxx2b
 )
