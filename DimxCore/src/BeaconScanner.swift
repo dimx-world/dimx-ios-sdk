@@ -30,17 +30,25 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
             Logger.warn("[Beacon] ignoring invalid scan UUID")
         }
         let uuids = Set(parsedUuids)
+        var removedCount = 0
 
         for uuid in Set(mConstraints.keys).subtracting(uuids) {
-            if let constraint = mConstraints.removeValue(forKey: uuid),
-               mRangingUuids.remove(uuid) != nil {
-                mManager.stopRangingBeacons(satisfying: constraint)
-                Logger.info("[Beacon] ranging stopped UUID [\(uuid.uuidString.lowercased())]")
+            if let constraint = mConstraints.removeValue(forKey: uuid) {
+                removedCount += 1
+                if mRangingUuids.remove(uuid) != nil {
+                    mManager.stopRangingBeacons(satisfying: constraint)
+                }
             }
         }
 
+        var addedCount = 0
         for uuid in uuids where mConstraints[uuid] == nil {
             mConstraints[uuid] = CLBeaconIdentityConstraint(uuid: uuid)
+            addedCount += 1
+        }
+
+        if addedCount > 0 || removedCount > 0 {
+            Logger.info("[Beacon] scan UUIDs updated added [\(addedCount)] removed [\(removedCount)] total [\(mConstraints.count)]")
         }
 
         startRangingIfAuthorized()
@@ -49,10 +57,14 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
     private func startRangingIfAuthorized() {
         switch mManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
+            var startedCount = 0
             for (uuid, constraint) in mConstraints where !mRangingUuids.contains(uuid) {
                 mManager.startRangingBeacons(satisfying: constraint)
                 mRangingUuids.insert(uuid)
-                Logger.info("[Beacon] ranging started UUID [\(uuid.uuidString.lowercased())]")
+                startedCount += 1
+            }
+            if startedCount > 0 {
+                Logger.info("[Beacon] ranging started UUIDs [\(startedCount)] total [\(mRangingUuids.count)]")
             }
         default:
             break
@@ -72,6 +84,9 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
             let minor = beacon.minor.int32Value
             let rssi = Int32(beacon.rssi)
             let id = "\(uuid):\(major):\(minor)"
+            if beacon.proximity == .unknown || beacon.accuracy < 0 {
+                continue
+            }
             if mObservedBeacons.insert(id).inserted {
                 Logger.info("[Beacon] observed [\(id)] RSSI [\(rssi)] measuredPower [\(Self.measuredPower)]")
             }
