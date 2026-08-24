@@ -14,10 +14,14 @@ let coreVersion = "0.0.6"
 // resolution, with SwiftPM naming the absent artifact - never a silent
 // fallback to the published engine.
 //
-// Tooling re-evaluates this manifest when the file itself changes, not when
-// Libs/ appears - so the build that fills Libs/ also touches this file
-// (env/ios/build.sh), and a stubborn Xcode is cured once with
-// File > Packages > Reset Package Caches.
+// The switch is read at resolution time, and an Xcode that has already
+// resolved this package holds its answer for the whole session: the build
+// that fills Libs/ touches this file (env/ios/build.sh), but a running Xcode
+// does not necessarily look again. File > Packages > Reset Package Caches is
+// not the cure either - it re-fetches what the graph in memory names, which
+// is how a session that resolved the published dxcore downloads it again
+// after Libs/ appeared. Quitting Xcode and reopening the project is what
+// re-reads this file.
 
 let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 var libsIsDirectory: ObjCBool = false
