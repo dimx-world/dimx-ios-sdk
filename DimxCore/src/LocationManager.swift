@@ -14,7 +14,9 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     private let mManager = CLLocationManager()
     private let mBeaconScanner = BeaconScanner()
     private var mLocation: CLLocation?
-    private var mAuthCallback: ((Bool) -> Void)?
+    // Everyone waiting on the one prompt that can be up at a time; a second
+    // request while it shows joins the list instead of replacing the first.
+    private var mAuthCallbacks: [(Bool) -> Void] = []
     
     override init() {
         super.init()
@@ -32,17 +34,29 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         Logger.info("location manager authorization status changed: \(status.rawValue)")
         switch status {
         case .authorizedWhenInUse, .authorizedAlways:
-            mAuthCallback?(true)
-            mAuthCallback = nil
-            break
+            answerAuthCallbacks(true)
         case .denied, .restricted:
-            mAuthCallback?(false)
-            mAuthCallback = nil
-            break
+            answerAuthCallbacks(false)
         case .notDetermined:
             break
         @unknown default:
             break
+        }
+    }
+
+    private func answerAuthCallbacks(_ granted: Bool) {
+        let callbacks = mAuthCallbacks
+        mAuthCallbacks.removeAll()
+        for callback in callbacks {
+            callback(granted)
+        }
+    }
+
+    func authorizationStatus() -> CLAuthorizationStatus {
+        if #available(iOS 14.0, *) {
+            return mManager.authorizationStatus
+        } else {
+            return CLLocationManager.authorizationStatus()
         }
     }
     
@@ -97,18 +111,17 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         mBeaconScanner.stop()
     }
     
+    /// Answers at once when the user has already decided, and after the prompt
+    /// when they have not. Only `.notDetermined` can be prompted for: iOS never
+    /// shows the alert twice, so a denial stands until changed in Settings.
     func requestPermission(_ callback: @escaping (Bool) -> Void) {
-        let status: CLAuthorizationStatus
-        if #available(iOS 14.0, *) {
-            status = mManager.authorizationStatus
-        } else {
-            status = CLLocationManager.authorizationStatus()
-        }
-        
-        switch status {
+        switch authorizationStatus() {
         case .notDetermined:
-            mAuthCallback = callback
-            mManager.requestWhenInUseAuthorization()
+            let prompting = !mAuthCallbacks.isEmpty
+            mAuthCallbacks.append(callback)
+            if !prompting {
+                mManager.requestWhenInUseAuthorization()
+            }
             return
         case .authorizedWhenInUse, .authorizedAlways:
             callback(true)

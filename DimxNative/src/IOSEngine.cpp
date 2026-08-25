@@ -197,8 +197,8 @@ void processGeolocationUpdate(double lat, double lng, double alt, double hacc, d
 
     // CoreLocation delivers on the main thread; the geolocation manager belongs
     // to the engine thread.
-    g_engine_instance->pushEvent([coords = GeoCoords(lat, lng, alt, hacc, vacc)]() {
-        g_geolocation().onDeviceLocationUpdate(coords);
+    g_engine_instance->pushEvent([lat, lng, alt, hacc, vacc]() {
+        g_geolocation().onDeviceLocationUpdate({lat, lng, alt, hacc, vacc, std::nullopt, GeoCoordsSource::System});
     });
 }
 

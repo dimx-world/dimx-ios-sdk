@@ -16,6 +16,12 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     // firebaseapp.com while the app is served from dimx.world, so a rule written around
     // the app's own domain misses it - which is how the popup ended up in Safari, where
     // the credential had no opener to return to.
+    //
+    // The host the app is served from is deliberately absent: it is whatever
+    // web_app_host says - app.dimx.world, or a development machine by its LAN address
+    // when Cockpit points a debug build there - and shouldStayInWebView reads it from
+    // the setting rather than from a list that would have to name one developer's
+    // machine (as "sergei-laptop" once did here).
     static private let inAppHosts: Set<String> = [
         "dimx-world.firebaseapp.com",
         "dimx-world.web.app",
@@ -23,8 +29,7 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         "appleid.apple.com",
         "www.youtube.com",
         "m.youtube.com",
-        "localhost",
-        "sergei-laptop"
+        "localhost"
     ]
 
     //static private var startupAppUrl: String = ""
@@ -185,6 +190,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             return
         } else if (cmd == "START_PROVIDER_SIGN_IN") {
             startProviderSignIn(params["providerId"] as! String)
+            return
+        } else if (cmd == "REQUEST_PERMISSIONS") {
+            Context.inst().permissions().request(feature: params["feature"] as? String ?? "")
             return
         }
 
@@ -431,10 +439,23 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         if inAppHosts.contains(host) {
             return true
         }
+        // This app's own page, wherever it is served from - the one host that must
+        // never leave the web view, and the one a list cannot know in advance.
+        if host.lowercased() == webAppHostName() {
+            return true
+        }
         // Matched with contains("dimx.world") before, which both let through any host
         // merely mentioning the name and - the reason sign-in broke - missed
         // dimx-world.firebaseapp.com, where the hyphen makes it a different string.
         return host == "dimx.world" || host.hasSuffix(".dimx.world")
+    }
+
+    /// The host of whatever web_app_host currently points at - this app's own page by
+    /// definition. Repointing that setting is already what makes another host the app,
+    /// so it is the setting that is read, the way android's WebActivity reads it.
+    /// Empty when the setting is not a URL with a host, and then nothing matches it.
+    static private func webAppHostName() -> String {
+        return URL(string: Context.inst().settings().webAppHost())?.host?.lowercased() ?? ""
     }
 
     func createSpinnerView(_ containerView: UIView) {

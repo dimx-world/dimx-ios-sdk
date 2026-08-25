@@ -44,7 +44,9 @@ public class AppSettings {
         return mWebAppHost
     }
 
-    func setWebAppHost(_ value: String) {
+    /// Public for the app's own override: a debug build of dimx-ios-app applies the
+    /// host Cockpit compiled into its Info.plist here, before the first screen opens.
+    public func setWebAppHost(_ value: String) {
         mWebAppHost = value
         UserDefaults.standard.setValue(mWebAppHost, forKey: AppSettings.WEB_APP_HOST_KEY)
         Logger.info("Setting web app host: \(String(describing: mWebAppHost))")

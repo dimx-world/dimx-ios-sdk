@@ -29,12 +29,11 @@ public class Context: NSObject
     private let mSettings = AppSettings()
     private var mAppConfig: AppConfig!
     private var mLocationManager: LocationManager!
+    private var mPermissions: PermissionsManager!
     private var mWindow: UIWindow!
 
     private var mARViewCtrl: ARViewCtrl!
     private var mWebViewCtrl: WebViewCtrl?
-
-    private var mPermissionsGranted = false
 
     // The engine thread reads the interface orientation every frame (camera
     // projection, background plane) and must not go near UIKit for it. Cached
@@ -59,6 +58,7 @@ public class Context: NSObject
     func initializeInternal(_ window: UIWindow, _ appConfig: AppConfig) {
         mAppConfig = appConfig
         mLocationManager = LocationManager()
+        mPermissions = PermissionsManager(mLocationManager)
         mWindow = window
 
         refreshInterfaceOrientation()
@@ -209,21 +209,13 @@ public class Context: NSObject
         UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
-    public func permissionsGranted() -> Bool {
-        return mPermissionsGranted
+    /// Asks for and reports the permissions the AR screen needs. Nothing is
+    /// cached: `showARScreen` asks on every call, so a denial is recovered
+    /// from by tapping the camera button again once Settings has changed.
+    public func permissions() -> PermissionsManager {
+        return mPermissions
     }
-    
-    public func validatePermissions(_ callback: @escaping (Bool) -> Void) {
-        if mPermissionsGranted {
-            callback(true)
-            return
-        }
-        checkPermissions({[self] success in
-            mPermissionsGranted = success
-            callback(success)
-        })
-    }
-    
+
     public func settings() -> AppSettings {
         return mSettings
     }
@@ -246,90 +238,56 @@ public class Context: NSObject
         return mWebViewCtrl;
     }
 
-    func showAlert(_ message: String, _ callback: @escaping () -> Void) {
-        guard let topController = topMostViewController() else {
-            Logger.error("No top controller found")
-            return
-        }
-        
-        let alertController = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        alertController.addAction(UIAlertAction(title: "Go To Settings", style: .default, handler: { /*[alertController]*/ action in
-            switch action.style{
-                case .default:
-                    UIApplication.shared.open(URL(string:UIApplication.openSettingsURLString)!)
-                    break
-                case .cancel: break
-                case .destructive: break
-                @unknown default: break
-            }
-        }))
-        alertController.addAction(UIAlertAction(title: "Continue without AR", style: .default, handler: { /*[alertController]*/ action in
-            switch action.style{
-                case .default:
-                    callback()
-                    break
-                case .cancel: break
-                case .destructive: break
-                @unknown default: break
-            }
-        }))
-        
-        topController.present(alertController, animated: true, completion: nil)
-    }
-
-    func checkPermissions(_ callback: @escaping (Bool) -> Void) {
-        mLocationManager.requestPermission({ [self] granted in
-            if !granted {
-                Logger.error("Location access denied")
-                showAlert("Please grant location permission to enable location-based AR functionality.", { [] in callback(false)})
-                return
-            }
-
-            if AVCaptureDevice.authorizationStatus(for: .video) ==  .authorized {
-                callback(true)
-            } else {
-                AVCaptureDevice.requestAccess(for: .video, completionHandler: { [self] (granted: Bool) in
-                    DispatchQueue.main.async { [self] in
-                        if !granted {
-                            Logger.error("Camera access denied")
-                            showAlert("Please grant camera permission to enable AR functionality.", {[] in callback(false)})
-                            return
-                        }
-                        callback(true)
-                    }
-                })
-            }
-        })
-    }
-
     public func showAppScreen(_ args: String) {
         mAppConfig.showAppScreenAction()?(args)
     }
 
-    public func showARScreen(_ url: String, _ settingsData: String, _ accountData: String) {
-        validatePermissions { [self] success in
-            if success {
-                if (mARViewCtrl == nil) {
-                    mARViewCtrl = ARViewCtrl()
-                    mARViewCtrl.modalPresentationStyle = .fullScreen //or .overFullScreen for transparency
-                }
-
-                // The session is handed to the screen and applied when it comes
-                // up, rather than reloaded from here - the engine is already
-                // running and the screen is what decides it is live.
-                mARViewCtrl.pendingUrl = url
-                mARViewCtrl.pendingSettingsData = settingsData
-                mARViewCtrl.pendingAccountData = accountData
-
-                if mARViewCtrl.isCurrentlyVisible {
-                    mARViewCtrl.onScreenResume()
-                    return
-                }
-
-                mWindow.rootViewController!.dismiss(animated: false)
-                mWindow.rootViewController!.present(mARViewCtrl, animated: false, completion: nil)
+    /// Opens the AR screen once the user has granted what it needs, asking for
+    /// whatever is still undecided. Only the camera is required: a refusal
+    /// shows an alert with a way to Settings, then runs `onDenied` - a deep
+    /// link falls back to the web screen there, the camera button on the web
+    /// screen has nothing to fall back to. Location is recommended: without it
+    /// the screen still opens, with a toast saying it cannot find nearby
+    /// content. Beacon ranging is only logged when Bluetooth is off.
+    public func showARScreen(_ url: String, _ settingsData: String, _ accountData: String,
+                             onDenied: (() -> Void)? = nil) {
+        mPermissions.requestAR { [self] outcome in
+            if !outcome.camera {
+                Logger.warn("AR screen refused: camera access denied")
+                mPermissions.presentCameraDeniedAlert(outcome) { onDenied?() }
+                return
+            }
+            if !outcome.bluetooth {
+                Logger.warn("Bluetooth is off: beacon ranging unavailable, positioning falls back to GPS")
+            }
+            presentARScreen(url, settingsData, accountData)
+            if !outcome.location {
+                Logger.warn("Location access denied: Live View opens without nearby content")
+                Toast.show("Access to your location is off for this app, so Live View cannot find nearby content.\(outcome.settingsHint)")
             }
         }
+    }
+
+    private func presentARScreen(_ url: String, _ settingsData: String, _ accountData: String) {
+        if (mARViewCtrl == nil) {
+            mARViewCtrl = ARViewCtrl()
+            mARViewCtrl.modalPresentationStyle = .fullScreen //or .overFullScreen for transparency
+        }
+
+        // The session is handed to the screen and applied when it comes
+        // up, rather than reloaded from here - the engine is already
+        // running and the screen is what decides it is live.
+        mARViewCtrl.pendingUrl = url
+        mARViewCtrl.pendingSettingsData = settingsData
+        mARViewCtrl.pendingAccountData = accountData
+
+        if mARViewCtrl.isCurrentlyVisible {
+            mARViewCtrl.onScreenResume()
+            return
+        }
+
+        mWindow.rootViewController!.dismiss(animated: false)
+        mWindow.rootViewController!.present(mARViewCtrl, animated: false, completion: nil)
     }
 
     public func showWebScreen(_ webUrl: String) {

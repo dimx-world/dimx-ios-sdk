@@ -23,6 +23,13 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_GEOLOCATION_UPDATE"});
     }
 
+    // Asks for the permissions behind a feature ("map": location, with beacon
+    // ranging reported) as the user goes there - another chance after a refusal
+    // at the start. Returns nothing; a grant shows up as geolocation updates.
+    requestPermissions(feature) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_PERMISSIONS", feature: feature});
+    }
+
     // Synchronous by contract, so it cannot go through a message handler - those are
     // one-way. The list is injected at document start alongside this script and holds the
     // providers the app is actually configured to run; the page uses its own popup for
