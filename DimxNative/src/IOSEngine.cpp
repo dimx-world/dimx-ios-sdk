@@ -528,9 +528,16 @@ void IOSEngine::processCommand(const std::string& command, ConfigPtr arguments)
     static const Config kEmpty;
     const Config& args = arguments ? *arguments : kEmpty;
 
-    if (command == "REGISTER_BEACON_SCAN_UUID") {
-        if (g_swiftEngine()->registerBeaconScanUuid) {
-            g_swiftEngine()->registerBeaconScanUuid(args.get("uuid", "").c_str());
+    if (command == "BEACONS_REGISTER_UUID") {
+        if (g_swiftEngine()->beaconsRegisterUuid) {
+            g_swiftEngine()->beaconsRegisterUuid(args.get("uuid", "").c_str());
+        }
+        return;
+    }
+
+    if (command == "BEACONS_STOP_SCANNING") {
+        if (g_swiftEngine()->beaconsStopScanning) {
+            g_swiftEngine()->beaconsStopScanning();
         }
         return;
     }

@@ -31,7 +31,6 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
     private var mRegistered = Set<UUID>()
     // What CoreLocation has been asked to range and has not failed since.
     private var mRanging = Set<UUID>()
-    private var mObservedBeacons = Set<String>()
     private var mFullAccuracyRequested = false
     private var mRetry: DispatchWorkItem?
     private var mRetryDelay = BeaconScanner.retryMin
@@ -47,9 +46,10 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
         NotificationCenter.default.removeObserver(self)
     }
 
-    /// Registers one UUID to range for. Registration only ever grows: the engine
-    /// adds beacons as it learns of them and never takes one back, so there is no
-    /// removal path and a repeat of a known UUID is a no-op.
+    /// Registers one UUID to range for. The set only grows between `stop`s: the
+    /// engine adds UUIDs as it learns of nearby beacons and, rather than taking
+    /// them back one by one, stops the scan outright once none are nearby. A
+    /// repeat of a known UUID is a no-op.
     func register(_ value: String) {
         guard let uuid = UUID(uuidString: value) else {
             Logger.warn("[Beacon] ignoring malformed UUID [\(value)]")
@@ -61,6 +61,20 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
         Logger.info("[Beacon] scan UUID registered [\(uuid.uuidString.lowercased())] total [\(mRegistered.count)]")
 
         sync()
+    }
+
+    /// The engine has no beacons nearby: ranging stops and every UUID is
+    /// forgotten, so the next `register` starts from nothing.
+    func stop() {
+        resetRetry()
+        for uuid in mRanging {
+            mManager.stopRangingBeacons(satisfying: CLBeaconIdentityConstraint(uuid: uuid))
+        }
+        if !mRanging.isEmpty {
+            Logger.info("[Beacon] ranging stopped UUIDs [\(mRanging.count)]")
+        }
+        mRanging.removeAll()
+        mRegistered.removeAll()
     }
 
     // MARK: - Starting
@@ -180,10 +194,6 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
             let major = beacon.major.int32Value
             let minor = beacon.minor.int32Value
             let rssi = Int32(beacon.rssi)
-            let id = "\(uuid):\(major):\(minor)"
-            if mObservedBeacons.insert(id).inserted {
-                Logger.info("[Beacon] observed [\(id)] RSSI [\(rssi)] measuredPower [\(Self.measuredPower)]")
-            }
 
             processBeaconObservation(uuid, major, minor, rssi, Self.measuredPower)
         }

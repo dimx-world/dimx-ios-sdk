@@ -88,8 +88,13 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
 
     /// The engine names a beacon UUID it wants observations for. Ranging is not
     /// started until the first one arrives, and covers exactly the UUIDs registered.
-    func registerBeaconScanUuid(_ uuid: String) {
+    func beaconsRegisterUuid(_ uuid: String) {
         mBeaconScanner.register(uuid)
+    }
+
+    /// The engine has no beacons nearby; ranging and its UUIDs are dropped until the next registration.
+    func beaconsStopScanning() {
+        mBeaconScanner.stop()
     }
     
     func requestPermission(_ callback: @escaping (Bool) -> Void) {
