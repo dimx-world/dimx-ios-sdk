@@ -16,6 +16,7 @@
 //#include <PhysxManager.h>
 #include <ui/imgui/ImGuiManager.h>
 #include <AppUtils.h>
+#include <BeaconManager.h>
 #include <Clock.h>
 #include <GeolocationManager.h>
 #include <world/World.h>
@@ -198,6 +199,19 @@ void processGeolocationUpdate(double lat, double lng, double alt, double hacc, d
     // to the engine thread.
     g_engine_instance->pushEvent([coords = GeoCoords(lat, lng, alt, hacc, vacc)]() {
         g_geolocation().onDeviceLocationUpdate(coords);
+    });
+}
+
+void processBeaconObservation(const char* uuid,
+                              int major,
+                              int minor,
+                              int rssi,
+                              int measuredPower)
+{
+    if (!g_engine_instance || !uuid || !*uuid) { return; }
+
+    g_engine_instance->pushEvent([uuid = std::string(uuid), major, minor, rssi, measuredPower] {
+        g_beacons().onObservation(uuid, major, minor, rssi, measuredPower);
     });
 }
 
@@ -513,6 +527,14 @@ void IOSEngine::processCommand(const std::string& command, ConfigPtr arguments)
     // null-safe empty node instead of a raw string.
     static const Config kEmpty;
     const Config& args = arguments ? *arguments : kEmpty;
+
+    if (command == "UPDATE_BEACON_SCAN_UUIDS") {
+        if (g_swiftEngine()->updateBeaconScanUuids) {
+            const std::string uuids = args.get("uuids", Config::Empty).toString();
+            g_swiftEngine()->updateBeaconScanUuids(uuids.c_str());
+        }
+        return;
+    }
 
     // All of these run on the engine thread and all of them end up in UIKit, so
     // the Swift side of the table dispatches to the main queue.
