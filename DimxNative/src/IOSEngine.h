@@ -18,7 +18,7 @@ struct SwiftEngine
     void (*showAppScreen)(const char*);
     void (*openUrlExternal)(const char*);
     void (*requestGeolocationUpdate)();
-    void (*updateBeaconScanUuids)(const char*);
+    void (*registerBeaconScanUuid)(const char*);
     void (*moveToExtMediaFile)(const char* src, const char* dst);
     void (*shareExtMediaFile)(const char*);
 

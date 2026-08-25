@@ -86,8 +86,10 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    func updateBeaconScanUuids(_ json: String) {
-        mBeaconScanner.updateUuids(json)
+    /// The engine names a beacon UUID it wants observations for. Ranging is not
+    /// started until the first one arrives, and covers exactly the UUIDs registered.
+    func registerBeaconScanUuid(_ uuid: String) {
+        mBeaconScanner.register(uuid)
     }
     
     func requestPermission(_ callback: @escaping (Bool) -> Void) {

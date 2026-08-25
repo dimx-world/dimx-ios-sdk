@@ -210,8 +210,8 @@ void processBeaconObservation(const char* uuid,
 {
     if (!g_engine_instance || !uuid || !*uuid) { return; }
 
-    g_engine_instance->pushEvent([uuid = std::string(uuid), major, minor, rssi, measuredPower] {
-        g_beacons().onObservation(uuid, major, minor, rssi, measuredPower);
+    g_engine_instance->pushEvent([uuid = std::string(uuid), major, minor, rssi, measuredPower]() mutable {
+        g_beacons().onObservation(std::move(uuid), major, minor, rssi, measuredPower);
     });
 }
 
@@ -528,10 +528,9 @@ void IOSEngine::processCommand(const std::string& command, ConfigPtr arguments)
     static const Config kEmpty;
     const Config& args = arguments ? *arguments : kEmpty;
 
-    if (command == "UPDATE_BEACON_SCAN_UUIDS") {
-        if (g_swiftEngine()->updateBeaconScanUuids) {
-            const std::string uuids = args.get("uuids", Config::Empty).toString();
-            g_swiftEngine()->updateBeaconScanUuids(uuids.c_str());
+    if (command == "REGISTER_BEACON_SCAN_UUID") {
+        if (g_swiftEngine()->registerBeaconScanUuid) {
+            g_swiftEngine()->registerBeaconScanUuid(args.get("uuid", "").c_str());
         }
         return;
     }
