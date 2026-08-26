@@ -28,6 +28,15 @@ class Mesh
     private(set) var vertexLayoutKey: [Int] = []
 
     var numVerts = 0
+    var numActiveVerts = 0
+    var numActiveInds = 0
+
+    // A dynamic mesh is rewritten every frame. It writes into one of a few
+    // buffers in turn, so the CPU never overwrites what a frame still in
+    // flight is reading, and only its active range is copied.
+    private var dynamicBuffers: [MTLBuffer] = []
+    private var dynamicIndex = 0
+    private var dynamicCapacity = 0
 
     static func initCallbacks() {
         g_swiftMesh().pointee.createMesh = { (coreMat: Optional<UnsafeRawPointer>) -> (Int) in return Mesh.create(coreMat!) }
@@ -74,9 +83,10 @@ class Mesh
         
         if Mesh_dirtyFlag(coreMesh) {
             reloadMeshGeometry()
+            Mesh_clearDirtyFlag(coreMesh)
         }
         
-        if numVerts == 0 {
+        if numActiveVerts == 0 {
             return;
         }
 
@@ -89,7 +99,7 @@ class Mesh
         }
         if indexBuffer != nil {
             encoder.drawIndexedPrimitives(type: primitiveType,
-                                          indexCount: numInds,
+                                          indexCount: numActiveInds,
                                           indexType: indexType,
                                           indexBuffer: indexBuffer!,
                                           indexBufferOffset: 0,
@@ -99,15 +109,48 @@ class Mesh
         } else {
             encoder.drawPrimitives(type: primitiveType,
                                    vertexStart: 0,
-                                   vertexCount: numVerts,
+                                   vertexCount: numActiveVerts,
                                    instanceCount: 1)
         }
     }
     
+    // The dynamic path: the active vertices straight into the next buffer
+    // of the ring, the indices once - a dynamic mesh writes them at build
+    // and never again (see GlMesh::reloadMeshGeometry for the GL side).
+    private func reloadDynamicGeometry(_ vertSize: Int) {
+        let capacity = max(vertSize * numVerts, 16)
+        if dynamicBuffers.isEmpty || dynamicCapacity < capacity {
+            dynamicBuffers = (0 ..< 3).map { _ in Renderer.instance.device.makeBuffer(length: capacity, options: [.storageModeShared])! }
+            dynamicCapacity = capacity
+            dynamicIndex = 0
+        }
+        dynamicIndex = (dynamicIndex + 1) % dynamicBuffers.count
+        vertexBuffer = dynamicBuffers[dynamicIndex]
+        if numActiveVerts > 0 {
+            let bytes = vertSize * numActiveVerts
+            Mesh_fillVertexBufferRange(coreMesh, vertexBuffer.contents().assumingMemoryBound(to: CChar.self), bytes, numActiveVerts)
+        }
+
+        numInds = Mesh_numInds(coreMesh)
+        if numInds > 0 {
+            let indexBufferSize = Int(Mesh_indexBufferSize(coreMesh))
+            if indexBuffer == nil || indexBuffer!.length != indexBufferSize {
+                indexType = indexTypeFromCore(Mesh_indexType(coreMesh))
+                indexBuffer = Renderer.instance.device.makeBuffer(bytes: Mesh_indexBufferData(coreMesh), length: indexBufferSize, options: [])
+            }
+        }
+    }
+
     func reloadMeshGeometry() {
         numVerts = Mesh_numVerts(coreMesh)
+        numActiveVerts = Mesh_numActiveVerts(coreMesh)
+        numActiveInds = Mesh_numActiveInds(coreMesh)
         if numVerts == 0 {
             return;
+        }
+        if Mesh_dynamic(coreMesh) {
+            reloadDynamicGeometry(Mesh_vertexSize(coreMesh))
+            return
         }
             
         let vertSize = Mesh_vertexSize(coreMesh)

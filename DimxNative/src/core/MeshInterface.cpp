@@ -9,7 +9,22 @@ long Mesh_numVerts(const void* ptr)
 
 long Mesh_numActiveVerts(const void* ptr)
 {
-    return reinterpret_cast<const Mesh*>(ptr)->numVerts();
+    return reinterpret_cast<const Mesh*>(ptr)->numActiveVerts();
+}
+
+bool Mesh_dynamic(const void* ptr)
+{
+    return reinterpret_cast<const Mesh*>(ptr)->dynamic();
+}
+
+void Mesh_fillVertexBufferRange(const void* ptr, char* outBuffer, long outBufferSize, long numVerts)
+{
+    reinterpret_cast<const Mesh*>(ptr)->fillVertexBuffer(outBuffer, static_cast<size_t>(outBufferSize), static_cast<size_t>(numVerts));
+}
+
+void Mesh_clearDirtyFlag(const void* ptr)
+{
+    const_cast<Mesh*>(reinterpret_cast<const Mesh*>(ptr))->setDirtyFlag(false);
 }
 
 long Mesh_vertexSize(const void* ptr)

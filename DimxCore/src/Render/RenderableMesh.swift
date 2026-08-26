@@ -38,6 +38,11 @@ class RenderableMesh
     func cameraDistSq() -> Float {
         return RenderableMesh_cameraDistSq(coreRenderableMesh)
     }
+
+    // View depth along the camera's direction: what the blended meshes sort on.
+    func sortDepth() -> Float {
+        return RenderableMesh_sortDepth(coreRenderableMesh)
+    }
     
     func getParentRenderable() -> Renderable {
         return parentRenderable

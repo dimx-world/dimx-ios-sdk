@@ -5,6 +5,8 @@ import DimxNative
 class Material
 {
     var defaultPipelineState: MTLRenderPipelineState!
+    // The same shader with the framebuffer as a blend factor, for Multiply.
+    var multiplyPipelineState: MTLRenderPipelineState!
     var occlusionPipelineState: MTLRenderPipelineState!
     var shadowMapPipelineState: MTLRenderPipelineState!
     var shadowsPipelineState: MTLRenderPipelineState!
@@ -35,7 +37,27 @@ class Material
 
     var highlightFactor = Float(0.0)
 
-    var transparent = false
+    // The core material this one draws for; it outlives this wrapper, which
+    // core deletes through the callback before the material goes.
+    var coreMaterial: UnsafeRawPointer?
+
+    // Render state is read off the core material at every draw rather than
+    // copied at initData: script changes it - entity.materials.get(...).blend -
+    // and a copy would keep drawing the old wiring. Same values as the GL
+    // renderer's; see Material.h.
+    var transparent: Bool { coreMaterial != nil && Material_transparent(coreMaterial) }
+    var blendMode: Int32 { coreMaterial != nil ? Int32(Material_effectiveBlend(coreMaterial)) : 0 }
+    var alphaCutoff: Float { coreMaterial != nil ? Material_alphaCutoff(coreMaterial) : 0.5 }
+    var depthWrite: Bool { coreMaterial == nil || Material_depthWrite(coreMaterial) }
+    var sortPriority: Int { coreMaterial != nil ? Int(Material_sortPriority(coreMaterial)) : 0 }
+    var cullMode: MTLCullMode {
+        switch coreMaterial != nil ? Material_cullMode(coreMaterial) : 0 {
+        case 1: return .front
+        case 2: return .none
+        default: return .back
+        }
+    }
+
     var numMeshVerts = Int32(0)
     var morphEnabled = false
     var morphNumVertComps = Int32(0)
@@ -150,7 +172,7 @@ class Material
     }
 
     func initData(_ coreMat: UnsafeRawPointer, _ mesh: Mesh, _ numSkelJoints: Int) {
-        transparent = Material_transparent(coreMat)
+        coreMaterial = coreMat
 
         Material_getParamVec4(coreMat, "baseColor", &baseColor)
         baseColorWeight = Material_getParamFloat(coreMat, "baseColorWeight")
@@ -197,6 +219,7 @@ class Material
         funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
         funcConsts.setConstantValue(&shadowsFlag, type: MTLDataType.bool, index: FunctionConstant.FCShadowsPass.rawValue)
         defaultPipelineState = pipelineState(.defaultPass, mesh) { self.createPipelineStateDescr(funcConsts, mesh) }
+        multiplyPipelineState = pipelineState(.defaultPass, mesh, multiply: true) { self.createPipelineStateDescr(funcConsts, mesh, multiply: true) }
 
         occlusonFlag = true
         funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
@@ -268,7 +291,12 @@ class Material
         fragUniforms.fRoughness = roughness
         
         fragUniforms.fReceiveLighting = receiveLighting
-        
+
+        let blend = blendMode
+        fragUniforms.fBlendMode = blend
+        fragUniforms.fAlphaCutoff = alphaCutoff
+        fragUniforms.fBaseColorMapPremultiplied = baseColorMap != nil && Texture_premultiplied(baseColorMap!.mCoreTex)
+
         let af = highlightFactor
         let mf = highlightFactor + 1.0
         fragUniforms.fAddColor = addColor + vector_float4(af, af, af, 0)
@@ -296,7 +324,7 @@ class Material
         } else if shadowsPass {
             encoder.setRenderPipelineState(shadowsPipelineState)
         } else {
-            encoder.setRenderPipelineState(defaultPipelineState)
+            encoder.setRenderPipelineState(blend == BLEND_MODE_MULTIPLY ? multiplyPipelineState : defaultPipelineState)
         }
 
         //Logger.warn("------ VERT stride: \(MemoryLayout<StandardVertexUniforms>.stride), size \(MemoryLayout<StandardVertexUniforms>.size)")
@@ -366,10 +394,14 @@ class Material
         let metalnessMap: Bool
         let roughnessMap: Bool
         let sdfText: Bool
+        // Blend factors are baked into a pipeline state: one for the
+        // premultiplied blend every mode but Multiply draws with, one for Multiply.
+        let multiply: Bool
     }
 
     private func pipelineState(_ pass: PipelineKey.Pass,
                                _ mesh: Mesh,
+                               multiply: Bool = false,
                                _ makeDescriptor: () -> MTLRenderPipelineDescriptor) -> MTLRenderPipelineState
     {
         let key = PipelineKey(pass: pass,
@@ -381,7 +413,8 @@ class Material
                               normalMap: normalMap != nil,
                               metalnessMap: metalnessMap != nil,
                               roughnessMap: roughnessMap != nil,
-                              sdfText: sdfText)
+                              sdfText: sdfText,
+                              multiply: multiply)
 
         if let cached = Renderer.instance.pipelineStates[key] {
             return cached
@@ -392,7 +425,7 @@ class Material
         return state
     }
 
-    func createPipelineStateDescr(_ funcConsts: MTLFunctionConstantValues, _ mesh: Mesh) -> MTLRenderPipelineDescriptor {
+    func createPipelineStateDescr(_ funcConsts: MTLFunctionConstantValues, _ mesh: Mesh, multiply: Bool = false) -> MTLRenderPipelineDescriptor {
         let defaultLibrary = Renderer.instance.getLibrary()
         let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
         pipelineStateDescriptor.vertexFunction = try! defaultLibrary.makeFunction(name: "standard_vertex", constantValues: funcConsts)
@@ -403,10 +436,20 @@ class Material
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperation.add
         pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperation.add
-        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactor.sourceAlpha
-        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.sourceAlpha
-        pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
-        pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
+        if multiply {
+            // The shader answers what to multiply the framebuffer by, alpha 1.
+            pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactor.zero
+            pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor.sourceColor
+            pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.zero
+            pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor.one
+        } else {
+            // The shader writes premultiplied colour (Standard.metal, blendOut),
+            // so one blend serves opaque, cutout, alpha and additive alike.
+            pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactor.one
+            pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.one
+            pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
+            pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
+        }
         pipelineStateDescriptor.depthAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
         pipelineStateDescriptor.stencilAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
         return pipelineStateDescriptor

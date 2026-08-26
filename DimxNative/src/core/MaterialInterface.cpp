@@ -9,6 +9,41 @@ bool Material_transparent(const void* ptr)
     return reinterpret_cast<const Material*>(ptr)->transparent();    
 }
 
+long Material_effectiveBlend(const void* ptr)
+{
+    switch (reinterpret_cast<const Material*>(ptr)->effectiveBlend()) {
+        case BlendMode::Cutout:   return 1;
+        case BlendMode::Alpha:    return 2;
+        case BlendMode::Additive: return 3;
+        case BlendMode::Multiply: return 4;
+        default:                  return 0;
+    }
+}
+
+float Material_alphaCutoff(const void* ptr)
+{
+    return reinterpret_cast<const Material*>(ptr)->alphaCutoff();
+}
+
+bool Material_depthWrite(const void* ptr)
+{
+    return reinterpret_cast<const Material*>(ptr)->depthWrite();
+}
+
+long Material_cullMode(const void* ptr)
+{
+    switch (reinterpret_cast<const Material*>(ptr)->cullMode()) {
+        case CullMode::Front: return 1;
+        case CullMode::Off:   return 2;
+        default:              return 0;
+    }
+}
+
+long Material_sortPriority(const void* ptr)
+{
+    return reinterpret_cast<const Material*>(ptr)->sortPriority();
+}
+
 const void* Material_getTexture(const void* ptr, const char* name)
 {
     return reinterpret_cast<const Material*>(ptr)->tryGetTexture(name);

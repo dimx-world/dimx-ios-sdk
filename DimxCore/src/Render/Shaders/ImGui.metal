@@ -7,6 +7,9 @@ struct VertexUniforms {
 
 struct FragmentUniforms {
     float redChannel;
+    // Whether the texture's colour is already multiplied by its alpha: images
+    // the engine decodes and its render targets are, the font atlas is not.
+    float premultiplied;
 };
 
 struct VertexIn {
@@ -37,6 +40,15 @@ fragment half4 imgui_fragment(VertexOut in                            [[stage_in
 {
     constexpr sampler linearSampler(coord::normalized, min_filter::linear, mag_filter::linear, mip_filter::linear);
     half4 texColor = texture.sample(linearSampler, in.texCoords);
-    return half4(in.color) * (uniforms.redChannel * half4(1, 1, 1, texColor.r) + (1 - uniforms.redChannel) * texColor);
+    if (uniforms.redChannel > 0.5) {
+        texColor = half4(1, 1, 1, texColor.r);
+    }
+    if (uniforms.premultiplied < 0.5) {
+        texColor.rgb *= texColor.a;
+    }
+    // Premultiplied out; the pass blends ONE / ONE_MINUS_SRC_ALPHA. The vertex
+    // colour is a straight tint with an alpha, applied as one.
+    half4 color = half4(in.color);
+    return half4(color.rgb * color.a * texColor.rgb, color.a * texColor.a);
 };
 

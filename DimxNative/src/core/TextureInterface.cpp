@@ -121,3 +121,8 @@ long Texture_nativeId(const void* ptr)
 {
     return static_cast<long>(reinterpret_cast<const Texture*>(ptr)->native().id());
 }
+
+bool Texture_premultiplied(const void* ptr)
+{
+    return reinterpret_cast<const Texture*>(ptr)->premultiplied();
+}

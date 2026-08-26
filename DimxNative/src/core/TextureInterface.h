@@ -34,6 +34,10 @@ const void* Texture_lodImageData(const void* ptr, long lodIdx);
 
 bool Texture_renderTarget(const void* ptr);
 
+// Whether the image data has its colour premultiplied by alpha - decoded
+// images are, so the shader knows to undo it before shading.
+bool Texture_premultiplied(const void* ptr);
+
 long Texture_nativeId(const void* ptr);
 
 #ifdef __cplusplus

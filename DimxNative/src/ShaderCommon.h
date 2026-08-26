@@ -33,6 +33,14 @@ FOUNDATION_EXPORT const unsigned char DimxCoreVersionString[];
 #endif
 
 #define METAL_MAX_MORPH_TARGETS_BLEND 20
+
+// StandardFragmentUniforms.fBlendMode - the same values Material_effectiveBlend
+// answers and the GL shader switches on.
+#define BLEND_MODE_OPAQUE   0
+#define BLEND_MODE_CUTOUT   1
+#define BLEND_MODE_ALPHA    2
+#define BLEND_MODE_ADDITIVE 3
+#define BLEND_MODE_MULTIPLY 4
 /*
 struct StandardVertexUniforms {
     matrix_float4x4 vViewMat;
@@ -81,6 +89,12 @@ struct StandardFragmentUniforms {
     bool fUseDepthOcclusion;
     matrix_float3x3 fDepthMapUVTransform;
     float fDepthMapAspectRatio;
+
+    // Render state (see Material.h): how alpha is meant, the cutout threshold,
+    // and whether the base colour map's texels are premultiplied by alpha.
+    int fBlendMode;
+    float fAlphaCutoff;
+    bool fBaseColorMapPremultiplied;
 };
 
 typedef NS_ENUM(NSInteger, VertexAttribute)

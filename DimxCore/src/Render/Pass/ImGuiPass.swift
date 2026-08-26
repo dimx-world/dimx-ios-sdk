@@ -40,8 +40,11 @@ class ImGuiPass
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperation.add
         pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperation.add
-        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactor.sourceAlpha
-        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.sourceAlpha
+        // The shader writes premultiplied colour (ImGui.metal), so a UI render
+        // target ends up holding premultiplied colour with a true alpha, which
+        // is what the standard shader reads it as.
+        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactor.one
+        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactor.one
         pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
         pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactor.oneMinusSourceAlpha
         pipelineStateDescriptor.depthAttachmentPixelFormat = renderer.depthStencilPixelFormat
@@ -168,6 +171,7 @@ class ImGuiPass
 
                 let texture: MTLTexture?
                 var redChannel: Float
+                var premultiplied: Float = 0.0
                 if let texData = call.pointee.texData {
                     // ImGui-managed font atlas (RGBA32), serviced by updateTextures() above.
                     texture = imguiTextures[ImTexture_texId(texData)]
@@ -175,11 +179,18 @@ class ImGuiPass
                 } else {
                     // User texture (ImGui::Image): texId carries the native texture id directly
                     // (Renderer.textures index) since ImGui 1.92 — no Texture_nativeId indirection.
-                    texture = renderer.textures[Int(bitPattern: call.pointee.texId)]?.mTexture
+                    let userTexture = renderer.textures[Int(bitPattern: call.pointee.texId)]
+                    texture = userTexture?.mTexture
                     // Single-channel (R8) user textures are sampled via the red channel as alpha.
                     redChannel = texture?.pixelFormat == MTLPixelFormat.r8Unorm ? 1.0 : 0.0
+                    // Decoded images and render targets carry premultiplied colour; the
+                    // shader multiplies the rest itself.
+                    if let userTexture = userTexture, Texture_premultiplied(userTexture.mCoreTex) {
+                        premultiplied = 1.0
+                    }
                 }
-                encoder.setFragmentBytes(&redChannel, length: 4, index: 1)
+                var fragUniforms: [Float] = [redChannel, premultiplied]
+                encoder.setFragmentBytes(&fragUniforms, length: 8, index: 1)
                 encoder.setFragmentTexture(texture, index: 0)
                 encoder.drawIndexedPrimitives(type: mesh.primitiveType,
                                               indexCount: call.pointee.numIndsInCall,

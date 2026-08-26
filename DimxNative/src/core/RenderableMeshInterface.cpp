@@ -15,3 +15,8 @@ float RenderableMesh_cameraDistSq(const void* ptr)
 {
     return reinterpret_cast<const RenderableMesh*>(ptr)->cameraDistSq();
 }
+
+float RenderableMesh_sortDepth(const void* ptr)
+{
+    return reinterpret_cast<const RenderableMesh*>(ptr)->sortDepth();
+}

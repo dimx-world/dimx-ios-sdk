@@ -312,6 +312,17 @@ float3 calcReflection(StandardVertexOut in, float3 albedo, float3 N, float3 V, f
     return (kD * albedo / PI + specular) * radiance * NdotL;
 }
 //-----------------------------------------------------------------
+// Premultiplied out. The pipeline blends ONE / ONE_MINUS_SRC_ALPHA for every
+// mode but Multiply, so additive is a matter of contributing no alpha, and
+// Multiply - drawn with ZERO / SRC_COLOR - of what to multiply by.
+float4 blendOut(float4 color, int blendMode)
+{
+    if (blendMode == BLEND_MODE_MULTIPLY) {
+        return float4(mix(float3(1.0), color.rgb, color.a), 1.0);
+    }
+    return float4(color.rgb * color.a, blendMode == BLEND_MODE_ADDITIVE ? 0.0 : color.a);
+}
+//-----------------------------------------------------------------
 fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
                                  constant StandardFragmentUniforms& uniforms [[buffer(FBIUniforms)]],
                                  depth2d<float> shadowMap [[texture(FTIShadowMap)]],
@@ -350,23 +361,48 @@ fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
             sdfColor *= in.color;
         }
         sdfColor.a *= alpha;
-        return (sdfColor + uniforms.fAddColor) * uniforms.fMultColor;
+        float4 sdfOut = (sdfColor + uniforms.fAddColor) * uniforms.fMultColor;
+        return float4(sdfOut.rgb * sdfOut.a, sdfOut.a);
     }
 
     float4 baseColor = uniforms.fBaseColor;
 
+    // The vertex colour multiplies whatever the base colour ends up as - the
+    // map, the flat colour, or their mix - as a tint with an alpha (glTF's
+    // COLOR_0), applied after the map is sampled. Mirrors standard.fs.
+    float4 vertColor = float4(1.0);
     if (VAColor) {
-        baseColor *= in.color;
+        vertColor = in.color;
     }
 
     if (VATexCoord && MPBaseColorMap) {
-        half4 texCol = baseColorMap.sample(linearSampler, in.texCoords);
-        baseColor = float4(texCol) * (1.0 - uniforms.fBaseColorWeight) + baseColor * uniforms.fBaseColorWeight;
-        baseColor.a = texCol.a;
+        float4 texCol = float4(baseColorMap.sample(linearSampler, in.texCoords));
+        // Decoded textures are stored premultiplied so that filtering keeps the
+        // colour of transparent texels out of the edges; the shading below wants
+        // straight colour, so that is undone here. Sources the engine does not
+        // decode - video, the camera feed - arrive straight.
+        if (uniforms.fBaseColorMapPremultiplied && texCol.a > 0.0) {
+            texCol.rgb /= texCol.a;
+        }
+        baseColor.rgb = texCol.rgb * (1.0 - uniforms.fBaseColorWeight) + baseColor.rgb * uniforms.fBaseColorWeight;
+        baseColor.a *= texCol.a;
     }
-    
+
+    baseColor *= vertColor;
+
+    if (uniforms.fBlendMode == BLEND_MODE_CUTOUT) {
+        if (baseColor.a < uniforms.fAlphaCutoff) {
+            discard_fragment();
+        }
+        baseColor.a = 1.0;
+    } else if (uniforms.fBlendMode == BLEND_MODE_OPAQUE) {
+        baseColor.a = 1.0;
+    } else if (baseColor.a <= 0.0) {
+        discard_fragment();
+    }
+
     if (!uniforms.fReceiveLighting) {
-        return (baseColor + uniforms.fAddColor) * uniforms.fMultColor;
+        return blendOut((baseColor + uniforms.fAddColor) * uniforms.fMultColor, uniforms.fBlendMode);
     }
 
 /*
@@ -432,5 +468,5 @@ fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
         outColor.xyz *= 1.0 - calcShadow(shadowMap, in.lightSpacePos, uniforms);
     }
     
-    return outColor;
+    return blendOut(outColor, uniforms.fBlendMode);
 }
