@@ -13,7 +13,6 @@
 #include <config/ConfigUtils.h>
 #include <AvMultimediaManager.h>
 #include <AlAudioDevice.h>
-//#include <PhysxManager.h>
 #include <ui/imgui/ImGuiManager.h>
 #include <AppUtils.h>
 #include <BeaconManager.h>
@@ -95,7 +94,9 @@ void initEngine(const char* appInstanceId,
     g_crossFactory().registerTypeOverride<RemoteResourceInterface, WebResourceInterface>(CrossType::RemoteResourceInterface);
     g_crossFactory().registerTypeOverride<DeviceAR, IOSDeviceAR>(CrossType::DeviceAR);
     g_crossFactory().registerTypeOverride<NativeCloudAnchorSession, IOSCloudAnchorSession>(CrossType::NativeCloudAnchorSession);
-//    g_crossFactory().registerTypeOverride<PhysicsManager, PhysxManager>(CrossType::PhysicsManager);
+    // Physics is not overridden here: dimx-core registers its Jolt backend
+    // itself when built with it (CrossFactory.cpp); the Jolt xcframework is a
+    // dependency of this target in Package.swift.
     g_crossFactory().registerTypeOverride<AnalyticsManager, IOSAnalyticsManager>(CrossType::AnalyticsManager);
     g_crossFactory().registerTypeOverride<Input, IOSInput>(CrossType::Input);
     g_crossFactory().registerTypeOverride<MultimediaManager, AvMultimediaManager>(CrossType::MultimediaManager);
