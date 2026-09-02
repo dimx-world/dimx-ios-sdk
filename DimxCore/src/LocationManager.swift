@@ -83,9 +83,6 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
                                      mLocation!.altitude,
                                      mLocation!.horizontalAccuracy,
                                      mLocation!.verticalAccuracy)
-            if let webCtrl = Context.inst().webViewCtrl() {
-                webCtrl.onsGeolocationUpdate(mLocation!)
-            }
         }
     }
     
