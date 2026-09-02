@@ -203,6 +203,17 @@ void processGeolocationUpdate(double lat, double lng, double alt, double hacc, d
     });
 }
 
+void requestGeolocationUpdate()
+{
+    if (!g_engine_instance) { return; }
+
+    // Reply through the core's GPS/BLE selection after its subscribers exist.
+    // Unlike forceUpdate(), this preserves the age and priority of a BLE fix.
+    g_engine_instance->pushEvent([] {
+        g_geolocation().requestUpdate();
+    }, ExecOpts::AfterInit);
+}
+
 void processBeaconObservation(const char* uuid,
                               int major,
                               int minor,
@@ -539,6 +550,14 @@ void IOSEngine::processCommand(const std::string& command, ConfigPtr arguments)
     if (command == "BEACONS_STOP_SCANNING") {
         if (g_swiftEngine()->beaconsStopScanning) {
             g_swiftEngine()->beaconsStopScanning();
+        }
+        return;
+    }
+
+    if (command == "UPDATE_GEOLOCATION") {
+        if (g_swiftEngine()->updateGeolocation) {
+            const std::string value = args.get<std::string>("value", {});
+            g_swiftEngine()->updateGeolocation(value.c_str());
         }
         return;
     }

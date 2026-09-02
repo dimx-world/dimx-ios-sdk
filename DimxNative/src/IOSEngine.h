@@ -20,6 +20,7 @@ struct SwiftEngine
     void (*requestGeolocationUpdate)();
     void (*beaconsRegisterUuid)(const char*);
     void (*beaconsStopScanning)();
+    void (*updateGeolocation)(const char*);
     void (*moveToExtMediaFile)(const char* src, const char* dst);
     void (*shareExtMediaFile)(const char*);
 
@@ -64,6 +65,7 @@ void setKeyboardTop(float top);
 void processApplink(const char* rawLink);
 void processQRCode(const char* code);
 void processGeolocationUpdate(double lat, double lng, double alt, double hacc, double vacc);
+void requestGeolocationUpdate();
 void processBeaconObservation(const char* uuid, int major, int minor, int rssi, int measuredPower);
 void getAnchorsTrackingStatus(const char* dimension, void* outStringObj);
 void cppConvertAppUrlToWebUrl(const char* webAppHost, const char* appUrl, void* outStringObj);

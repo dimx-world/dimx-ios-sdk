@@ -139,6 +139,10 @@ public class Context: NSObject
         g_swiftEngine().pointee.beaconsStopScanning = {
             DispatchQueue.main.async { Context.inst().locationManager().beaconsStopScanning() }
         }
+        g_swiftEngine().pointee.updateGeolocation = { (rawValue: UnsafePointer<CChar>!) -> Void in
+            let value = String(cString: rawValue)
+            DispatchQueue.main.async { Context.inst().webViewCtrl()?.updateGeolocation(value) }
+        }
         g_swiftEngine().pointee.moveToExtMediaFile = { (src: UnsafePointer<CChar>!, dst: UnsafePointer<CChar>!) -> Void in
             let src = String(cString: src)
             let dst = String(cString: dst)

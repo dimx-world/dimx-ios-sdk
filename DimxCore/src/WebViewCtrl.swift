@@ -8,7 +8,6 @@
 
 import UIKit
 import WebKit
-import CoreLocation
 import DimxNative
 
 class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNavigationDelegate, UIAdaptivePresentationControllerDelegate {
@@ -184,9 +183,7 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             }
             return
         } else if (cmd == "REQUEST_GEOLOCATION_UPDATE") {
-            if let loc = Context.inst().locationManager().location() {
-                onsGeolocationUpdate(loc)
-            }
+            requestGeolocationUpdate()
             return
         } else if (cmd == "START_PROVIDER_SIGN_IN") {
             startProviderSignIn(params["providerId"] as! String)
@@ -252,18 +249,17 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         }
     }
 
-    func onsGeolocationUpdate(_ loc: CLLocation) {
-        let geoStr = "\(loc.coordinate.latitude) \(loc.coordinate.longitude) \(loc.altitude) \(loc.horizontalAccuracy) \(loc.verticalAccuracy)"
+    func updateGeolocation(_ value: String) {
         let jscode =
             """
             if (window.DimxInterface) {
                 if (window.DimxInterface.updateGeolocation) {
-                    window.DimxInterface.updateGeolocation('\(geoStr)')
+                    window.DimxInterface.updateGeolocation('\(value)')
                 } else {
-                    console.error('FROM JAVA: window.DimxInterface.updateGeolocation not defined')
+                    console.error('FROM SWIFT: window.DimxInterface.updateGeolocation not defined')
                 }
             } else {
-                console.error('FROM JAVA: window.DimxInterface not defined')
+                console.error('FROM SWIFT: window.DimxInterface not defined')
             }
             """;
         webView.evaluateJavaScript(jscode) {
