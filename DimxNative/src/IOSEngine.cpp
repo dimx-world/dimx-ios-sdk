@@ -203,6 +203,46 @@ void processGeolocationUpdate(double lat, double lng, double alt, double hacc, d
     });
 }
 
+void requestGeolocationUpdate()
+{
+    if (!g_engine_instance) { return; }
+
+    // Reply through the core's GPS/BLE selection after its subscribers exist.
+    // Unlike forceUpdate(), this preserves the age and priority of a BLE fix.
+    g_engine_instance->pushEvent([] {
+        g_geolocation().requestUpdate();
+    }, ExecOpts::AfterInit);
+}
+
+void refreshNearbyBeacons()
+{
+    if (!g_engine_instance) { return; }
+
+    g_engine_instance->pushEvent([] {
+        g_beacons().refreshNearbyBeacons();
+    }, ExecOpts::AfterInit);
+}
+
+void updateAccount(const char* accountData)
+{
+    if (!g_engine_instance || !accountData) { return; }
+
+    g_engine_instance->pushEvent([data = std::string(accountData)] {
+        AppUtils::updateAccount(data);
+    }, ExecOpts::AfterInit);
+}
+
+void requestBeaconStatuses(const char* uuid, const char* requestId)
+{
+    if (!g_engine_instance || !uuid || !requestId) { return; }
+
+    g_engine_instance->pushEvent([uuid = std::string(uuid), requestId = std::string(requestId)] {
+        ConfigPtr response = g_beacons().getStatuses(uuid);
+        response->set("requestId", requestId);
+        g_engine().processCommand("UPDATE_BEACON_STATUSES", std::move(response));
+    }, ExecOpts::AfterInit);
+}
+
 void processBeaconObservation(const char* uuid,
                               int major,
                               int minor,
@@ -539,6 +579,22 @@ void IOSEngine::processCommand(const std::string& command, ConfigPtr arguments)
     if (command == "BEACONS_STOP_SCANNING") {
         if (g_swiftEngine()->beaconsStopScanning) {
             g_swiftEngine()->beaconsStopScanning();
+        }
+        return;
+    }
+
+    if (command == "UPDATE_BEACON_STATUSES") {
+        if (g_swiftEngine()->updateBeaconStatuses) {
+            const std::string value = args.toString();
+            g_swiftEngine()->updateBeaconStatuses(value.c_str());
+        }
+        return;
+    }
+
+    if (command == "UPDATE_GEOLOCATION") {
+        if (g_swiftEngine()->updateGeolocation) {
+            const std::string value = args.get<std::string>("value", {});
+            g_swiftEngine()->updateGeolocation(value.c_str());
         }
         return;
     }

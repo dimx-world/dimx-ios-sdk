@@ -8,7 +8,6 @@
 
 import UIKit
 import WebKit
-import CoreLocation
 import DimxNative
 
 class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNavigationDelegate, UIAdaptivePresentationControllerDelegate {
@@ -184,9 +183,19 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             }
             return
         } else if (cmd == "REQUEST_GEOLOCATION_UPDATE") {
-            if let loc = Context.inst().locationManager().location() {
-                onsGeolocationUpdate(loc)
-            }
+            requestGeolocationUpdate()
+            return
+        } else if (cmd == "REFRESH_NEARBY_BEACONS") {
+            refreshNearbyBeacons()
+            return
+        } else if (cmd == "UPDATE_ACCOUNT") {
+            guard let accountData = params["accountData"] as? String else { return }
+            updateAccount(accountData)
+            return
+        } else if (cmd == "REQUEST_BEACON_STATUSES") {
+            guard let uuid = params["uuid"] as? String,
+                  let requestId = params["requestId"] as? String else { return }
+            requestBeaconStatuses(uuid, requestId)
             return
         } else if (cmd == "START_PROVIDER_SIGN_IN") {
             startProviderSignIn(params["providerId"] as! String)
@@ -252,24 +261,52 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         }
     }
 
-    func onsGeolocationUpdate(_ loc: CLLocation) {
-        let geoStr = "\(loc.coordinate.latitude) \(loc.coordinate.longitude) \(loc.altitude) \(loc.horizontalAccuracy) \(loc.verticalAccuracy)"
+    func onsGeolocationUpdate(_ value: String) {
         let jscode =
             """
             if (window.DimxInterface) {
                 if (window.DimxInterface.updateGeolocation) {
-                    window.DimxInterface.updateGeolocation('\(geoStr)')
+                    window.DimxInterface.updateGeolocation('\(value)')
                 } else {
-                    console.error('FROM JAVA: window.DimxInterface.updateGeolocation not defined')
+                    console.error('FROM SWIFT: window.DimxInterface.updateGeolocation not defined')
                 }
             } else {
-                console.error('FROM JAVA: window.DimxInterface not defined')
+                console.error('FROM SWIFT: window.DimxInterface not defined')
             }
             """;
         webView.evaluateJavaScript(jscode) {
             (_, error) in
             if error != nil {
                 Logger.error("JS CALL ERROR: \(String(describing: error))")
+            }
+        }
+    }
+
+    func updateBeaconStatuses(_ value: String) {
+        guard let data = value.data(using: .utf8),
+              let status = try? JSONSerialization.jsonObject(with: data),
+              JSONSerialization.isValidJSONObject(status) else {
+            Logger.error("Ignoring malformed beacon status from the engine")
+            return
+        }
+        guard let webView = webView else {
+            return
+        }
+
+        // WebKit marshals `status` into the page as an argument. No field is interpolated
+        // into JavaScript source, so strings from the native boundary cannot alter the call.
+        let script =
+            """
+            if (window.DimxInterface && typeof window.DimxInterface.updateBeaconStatuses === 'function') {
+                window.DimxInterface.updateBeaconStatuses(status)
+            }
+            """
+        webView.callAsyncJavaScript(script,
+                                    arguments: ["status": status],
+                                    in: nil,
+                                    in: .page) { result in
+            if case .failure(let error) = result {
+                Logger.error("Beacon status JS call failed: \(error)")
             }
         }
     }

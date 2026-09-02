@@ -23,6 +23,18 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_GEOLOCATION_UPDATE"});
     }
 
+    refreshNearbyBeacons() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REFRESH_NEARBY_BEACONS"});
+    }
+
+    updateAccount(accountData) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "UPDATE_ACCOUNT", accountData: accountData});
+    }
+
+    requestBeaconStatuses(uuid, requestId) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_BEACON_STATUSES", uuid: uuid, requestId: requestId});
+    }
+
     // Asks for the permissions behind a feature ("map": location, with beacon
     // ranging reported) as the user goes there - another chance after a refusal
     // at the start. Returns nothing; a grant shows up as geolocation updates.
