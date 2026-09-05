@@ -52,6 +52,18 @@ uniform samplerCube fIrradianceMap;
 uniform samplerCube fRadianceMap;
 uniform float fRadianceMaxLod;
 
+// The blend mode's share of the shader, set by GlMaterial: what main() does
+// with the alpha it ends up with. Numbered as GlMaterial numbers them.
+#define BLEND_OPAQUE   0
+#define BLEND_CUTOUT   1
+#define BLEND_ALPHA    2
+#define BLEND_ADDITIVE 3
+#define BLEND_MULTIPLY 4
+
+uniform int fBlendMode;
+uniform float fAlphaCutoff;
+uniform bool fBaseColorMapPremultiplied;
+
 #include "lighting.inc"
 #include "shadow_map.inc"
 
@@ -168,89 +180,100 @@ void main()
 {
     vec4 baseColor = fBaseColor;
 
+    // The vertex colour multiplies whatever the base colour ends up as - the
+    // map, the flat colour, or their mix - as a tint with an alpha, which is
+    // what glTF's COLOR_0 means and what a particle's fade is made of.
 #ifdef VA_vColor
-    baseColor *= fVertColor;
+    // Not const: GLSL ES 3.00 requires const locals to have constant
+    // initializers, and a varying is not one - WebGL refuses the compile.
+    vec4 vertColor = fVertColor;
+#else
+    vec4 vertColor = vec4(1.0);
 #endif
 
 #if defined(VA_vTexCoord) && defined(MP_fBaseColorMap)
     vec4 texCol = texture(fBaseColorMap, fTexCoord);
-    baseColor = texCol * (1.0 - fBaseColorWeight) + baseColor * fBaseColorWeight;
-    baseColor.a = texCol.a; // Correct font rendering
+    // Decoded textures are stored premultiplied so that filtering keeps the
+    // colour of transparent texels out of the edges; the shading below wants
+    // straight colour, so that is undone here. Sources the engine does not
+    // decode - video, the camera feed - arrive straight.
+    if (fBaseColorMapPremultiplied && texCol.a > 0.0) {
+        texCol.rgb /= texCol.a;
+    }
+    baseColor.rgb = texCol.rgb * (1.0 - fBaseColorWeight) + baseColor.rgb * fBaseColorWeight;
+    baseColor.a *= texCol.a;
 #endif
 
-    if (baseColor.a < 0.001) {
+    baseColor *= vertColor;
+
+    if (fBlendMode == BLEND_CUTOUT) {
+        if (baseColor.a < fAlphaCutoff) {
+            discard;
+        }
+        baseColor.a = 1.0;
+    } else if (fBlendMode == BLEND_OPAQUE) {
+        baseColor.a = 1.0;
+    } else if (baseColor.a <= 0.0) {
         discard;
     }
 
-    if (!fReceiveLighting) {
-        outColor = (baseColor + fAddColor) * fMultColor;
-        return;
-    }
-
-
+    if (fReceiveLighting) {
 #ifdef VA_vNormal
-    vec3 N = normalize(fNormal);
+        vec3 N = normalize(fNormal);
 #else
-    vec3 N = vec3(0, 1, 0);
+        vec3 N = vec3(0, 1, 0);
 #endif
 
 #if defined(VA_vTexCoord) && defined(MP_fNormalMap)
-    N = applyNormalMap(N);
+        N = applyNormalMap(N);
 #endif
 
-    vec3 V = normalize(fCameraPos - fWorldPosition.xyz);
-    vec3 R = reflect(-V, N); 
+        vec3 V = normalize(fCameraPos - fWorldPosition.xyz);
+        vec3 R = reflect(-V, N);
 
 #if defined(VA_vTexCoord) && defined(MP_fMetalnessMap)
-    float metallic = texture(fMetalnessMap, fTexCoord).r;
+        float metallic = texture(fMetalnessMap, fTexCoord).r;
 #else
-    float metallic = fMetalness;
+        float metallic = fMetalness;
 #endif
 #if defined(VA_vTexCoord) && defined(MP_fRoughnessMap)
-    float roughness = texture(fRoughnessMap, fTexCoord).r;
+        float roughness = texture(fRoughnessMap, fTexCoord).r;
 #else
-    float roughness = fRoughness;
+        float roughness = fRoughness;
 #endif
 
-    vec3 F0 = vec3(0.04); 
-    F0 = mix(F0, baseColor.xyz, metallic);
+        vec3 F0 = vec3(0.04);
+        F0 = mix(F0, baseColor.xyz, metallic);
 
-    // loop per light
-    vec3 Lo = calcReflection(baseColor.xyz, N, V, F0, metallic, roughness, vec3(0, 5, 1), vec3(1, 1, 1));
+        // loop per light
+        vec3 Lo = calcReflection(baseColor.xyz, N, V, F0, metallic, roughness, vec3(0, 5, 1), vec3(1, 1, 1));
 
-    // ambient lighting (we now use IBL as the ambient term)
-    vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+        // ambient lighting (we now use IBL as the ambient term)
+        vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
 
-    vec3 kS = F;
-    vec3 kD = 1.0 - kS;
-    kD *= 1.0 - metallic;     
+        vec3 kS = F;
+        vec3 kD = 1.0 - kS;
+        kD *= 1.0 - metallic;
 
-    vec3 irradiance = texture(fIrradianceMap, N).rgb;
-    vec3 diffuse    = irradiance * baseColor.xyz;
+        vec3 irradiance = texture(fIrradianceMap, N).rgb;
+        vec3 diffuse    = irradiance * baseColor.xyz;
 
-    // sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
-    vec3 prefilteredColor = textureLod(fRadianceMap, R,  roughness * fRadianceMaxLod).rgb;
-    vec3 specular = prefilteredColor * F;
+        // sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
+        vec3 prefilteredColor = textureLod(fRadianceMap, R,  roughness * fRadianceMaxLod).rgb;
+        vec3 specular = prefilteredColor * F;
 
-    //vec3 ambient = vec3(0.03) * baseColor.xyz;
-    vec3 ambient = kD * diffuse + specular;
+        //vec3 ambient = vec3(0.03) * baseColor.xyz;
+        vec3 ambient = kD * diffuse + specular;
 
-    vec3 color = ambient + Lo;
+        baseColor.xyz = ambient + Lo;
 
 /*
-    // HDR tonemapping
-    color = color / (color + vec3(1.0));
-    // gamma correct
-    color = pow(color, vec3(1.0/2.2)); 
+        // HDR tonemapping
+        color = color / (color + vec3(1.0));
+        // gamma correct
+        color = pow(color, vec3(1.0/2.2));
 */
-
-    baseColor.xyz = color;
-
-    outColor = (baseColor + fAddColor) * fMultColor;
-
-#ifdef VA_vNormal
-    //outColor.xyz *= calcLight(fNormal);
-#endif
+    }
 
 /*
 // Commented out because some androids (Galaxy S20 FE 5G)
@@ -259,14 +282,25 @@ void main()
 // This leads to poor performance even when shadows are off.
 
     if (fReceiveShadows) {
-        outColor.xyz *= 1.0 - calcShadow(fLightSpacePos);
+        baseColor.xyz *= 1.0 - calcShadow(fLightSpacePos);
     }
 */
 
+    vec4 color = (baseColor + fAddColor) * fMultColor;
+
 #ifdef USE_DEPTH_FOR_OCCLUSION
+    // A fade: alpha alone, so the premultiply below scales the colour once.
     if (fUseDepthOcclusion) {
-        outColor *= calcOcclusion(fViewPosition, fScreenSpacePos);
+        color.a *= calcOcclusion(fViewPosition, fScreenSpacePos);
     }
 #endif
 
+    // Premultiplied out. The blend is ONE / ONE_MINUS_SRC_ALPHA for everything
+    // but Multiply, so additive is a matter of contributing no alpha, and
+    // Multiply - drawn with ZERO / SRC_COLOR - of what to multiply by.
+    if (fBlendMode == BLEND_MULTIPLY) {
+        outColor = vec4(mix(vec3(1.0), color.rgb, color.a), 1.0);
+    } else {
+        outColor = vec4(color.rgb * color.a, fBlendMode == BLEND_ADDITIVE ? 0.0 : color.a);
+    }
 }

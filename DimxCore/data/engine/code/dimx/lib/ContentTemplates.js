@@ -85,7 +85,12 @@ Templates.push({
         orientation: "Vertical", // Vertical, Horizontal
         width: 1,
         height: 1,
-        transparent: false,
+        // Left undecided: the material's `auto` blend reads the texture, so an
+        // image with transparency blends and one without stays opaque. `blend`
+        // names a mode outright - opaque, cutout, alpha, additive, multiply -
+        // and `transparent: true` still means alpha.
+        transparent: undefined,
+        blend: undefined,
         fadeIn: true,
         receiveLighting: false,
         doubleSided: false,
@@ -107,6 +112,7 @@ Templates.push({
                     width: record.width,
                     height: record.height,
                     transparent: record.transparent,
+                    blend: record.blend,
                     receiveLighting: record.receiveLighting,
                 },
                 Input: makeInputConfig(record),
@@ -190,7 +196,7 @@ Templates.push({
         let config = {
             ...makeEntityConfig(parent, record),
             components: {
-                Audio: {
+                AudioPlayer: {
                     asset: record.asset,
                     uiAlwaysOn: record.uiAlwaysOn,
                     style: record.style,
@@ -240,7 +246,7 @@ Templates.push({
         let config = {
             ...makeEntityConfig(parent, record),
             components: {
-                Video: {
+                VideoPlayer: {
                     asset: record.asset ? record.asset : '',
                     width: record.width,
                     height: record.height,
