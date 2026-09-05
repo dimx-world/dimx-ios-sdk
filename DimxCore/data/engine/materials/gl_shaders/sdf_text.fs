@@ -31,5 +31,7 @@ void main()
     baseColor.a *= alpha;
 #endif
 
-    outColor = (baseColor + fAddColor) * fMultColor;
+    // Premultiplied out, like every shader: the blend is ONE / ONE_MINUS_SRC_ALPHA.
+    vec4 color = (baseColor + fAddColor) * fMultColor;
+    outColor = vec4(color.rgb * color.a, color.a);
 }

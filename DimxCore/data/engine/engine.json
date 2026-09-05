@@ -124,8 +124,10 @@
     },
 
     "physics": {
-        "debug_mode": false,
-        "enable_pvd": false
+        "fixed_step": 0.016666667,
+        "max_steps": 4,
+        "temp_allocator_mb": 8,
+        "threads": -1
     },
 
     "world": {

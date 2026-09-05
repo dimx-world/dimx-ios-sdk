@@ -5,5 +5,6 @@ out vec4 outColor;
 
 void main()
 {
-    outColor = fColor;
+    // Premultiplied out, like every shader: the blend is ONE / ONE_MINUS_SRC_ALPHA.
+    outColor = vec4(fColor.rgb * fColor.a, fColor.a);
 }
