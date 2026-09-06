@@ -4,7 +4,7 @@
 import Foundation
 import PackageDescription
 
-let coreVersion = "0.1.0"
+let coreVersion = "0.1.1-rc2"
 
 // The engine: prebuilt xcframeworks - the ones the dimx-dev workspace builds
 // into Libs/ (`./dev ios`) when that directory exists, the published dxcore
