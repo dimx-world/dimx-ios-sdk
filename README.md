@@ -21,6 +21,31 @@ of the archive they uploaded - that belong in `Package.swift`. The third party
 lines are pasted in by hand; for `dxcore`, `publish_core_frameworks.sh` updates
 `coreVersion` and the six checksums in place (the urls interpolate `coreVersion`).
 
+## Using the SDK in an app
+
+Add the package to the app (`https://github.com/dimx-world/dimx-ios-sdk.git`,
+an exact version) and link the `DimxCore` product. Then, in the app target:
+
+1. **iOS 16.4 or newer** as the deployment target - the SDK's floor.
+2. **`-ObjC` in Other Linker Flags.** ARCore, which the SDK depends on, ships
+   as static libraries whose Objective-C categories the linker drops unless
+   the app links with `-ObjC`. Without it the app compiles, uploads and then
+   dies at launch with an unrecognized selector such as
+   `+[GARDeviceProfile profileForIdentifier:osVersion:configurationManager:]`.
+3. **Purpose strings in Info.plist** for the camera
+   (`NSCameraUsageDescription`), location when in use
+   (`NSLocationWhenInUseUsageDescription`), the photo library
+   (`NSPhotoLibraryUsageDescription`) and Bluetooth
+   (`NSBluetoothAlwaysUsageDescription`). App Store Connect refuses a binary
+   linking the SDK without them (ITMS-90683), by email.
+4. **A real device** - the engine ships device-only binaries.
+
+Initialise once the window exists: `Context.initialize(window, AppConfig())`,
+then `Context.inst().showARScreen(url, "", "", onDenied:)` and
+`showWebScreen(url)`. The sample app in
+[dimx-sdk-samples](https://github.com/dimx-world/dimx-sdk-samples) is the
+smallest working project.
+
 ## Working on the engine
 
 Inside the `ios-dev` workspace the package can be pointed at the engine built
