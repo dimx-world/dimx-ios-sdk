@@ -139,6 +139,16 @@ public class Context: NSObject
         g_swiftEngine().pointee.beaconsStopScanning = {
             DispatchQueue.main.async { Context.inst().locationManager().beaconsStopScanning() }
         }
+        g_swiftEngine().pointee.updateGeolocation = { (rawValue: UnsafePointer<CChar>!) -> Void in
+            let value = String(cString: rawValue)
+            DispatchQueue.main.async { Context.inst().webViewCtrl()?.onsGeolocationUpdate(value) }
+        }
+        g_swiftEngine().pointee.updateBeaconStatuses = { (rawValue: UnsafePointer<CChar>!) -> Void in
+            guard let rawValue = rawValue else { return }
+            // The C++ string ends with this call; copy it before crossing queues.
+            let value = String(cString: rawValue)
+            DispatchQueue.main.async { Context.inst().webViewCtrl()?.updateBeaconStatuses(value) }
+        }
         g_swiftEngine().pointee.moveToExtMediaFile = { (src: UnsafePointer<CChar>!, dst: UnsafePointer<CChar>!) -> Void in
             let src = String(cString: src)
             let dst = String(cString: dst)
