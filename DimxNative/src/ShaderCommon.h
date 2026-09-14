@@ -161,7 +161,6 @@ typedef NS_ENUM(NSInteger, FunctionConstant)
     FCShadowsPass,
     FCMorphEnabled,
     FCMorphNormals,
-    FCMorphTangents,
     
     FCBaseColorMap,
     FCNormalMap,

@@ -17,7 +17,6 @@ class Mesh
     var morphNumVertComps = 0
     var morphEnabled = false
     var morphNormals = false
-    var morphTangents = false
     
     var vertexDescriptor = MTLVertexDescriptor()
 
@@ -187,7 +186,6 @@ class Mesh
             if morphNumTargets > 0 {
                 morphEnabled = true
                 morphNormals = MeshMorph_hasNormals(morphPtr)
-                morphTangents = MeshMorph_hasTangents(morphPtr)
                 assert(numVerts == MeshMorph_numMeshVerts(morphPtr), "Number of verts mismatch")
                 morphNumVertComps = MeshMorph_numVertComponents(morphPtr)
                 let morphIndsSize = MeshMorph_indsDataSize(morphPtr)

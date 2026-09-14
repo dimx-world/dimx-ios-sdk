@@ -388,7 +388,6 @@ class Material
         let vertexLayout: [Int]
         let morphEnabled: Bool
         let morphNormals: Bool
-        let morphTangents: Bool
         let baseColorMap: Bool
         let normalMap: Bool
         let metalnessMap: Bool
@@ -408,7 +407,6 @@ class Material
                               vertexLayout: mesh.vertexLayoutKey,
                               morphEnabled: mesh.morphEnabled,
                               morphNormals: mesh.morphNormals,
-                              morphTangents: mesh.morphTangents,
                               baseColorMap: baseColorMap != nil,
                               normalMap: normalMap != nil,
                               metalnessMap: metalnessMap != nil,
@@ -484,7 +482,6 @@ class Material
 
         values.setConstantValue(&mesh.morphEnabled, type: MTLDataType.bool, index: FunctionConstant.FCMorphEnabled.rawValue)
         values.setConstantValue(&mesh.morphNormals, type: MTLDataType.bool, index: FunctionConstant.FCMorphNormals.rawValue)
-        values.setConstantValue(&mesh.morphTangents, type: MTLDataType.bool, index: FunctionConstant.FCMorphTangents.rawValue)
 
         var tmp = false
         

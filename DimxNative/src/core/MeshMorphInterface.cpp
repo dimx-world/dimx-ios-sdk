@@ -65,8 +65,3 @@ bool MeshMorph_hasNormals(const void* ptr)
 {
     return reinterpret_cast<const MeshMorph*>(ptr)->hasNormals();
 }
-
-bool MeshMorph_hasTangents(const void* ptr)
-{
-    return reinterpret_cast<const MeshMorph*>(ptr)->hasTangents();
-}

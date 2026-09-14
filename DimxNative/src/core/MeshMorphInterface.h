@@ -23,7 +23,6 @@ void MeshMorph_populateDataBuffers(const void* ptr,
                                    void* outVertsBuffer,
                                    long outVertsBufferSize);
 bool MeshMorph_hasNormals(const void* ptr);
-bool MeshMorph_hasTangents(const void* ptr);
 
 #ifdef __cplusplus
 }

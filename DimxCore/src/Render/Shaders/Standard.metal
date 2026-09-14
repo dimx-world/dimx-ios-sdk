@@ -20,7 +20,6 @@ constant bool OcclusionPass   [[function_constant(FCOcclusionPass)]];
 constant bool ShadowsPass     [[function_constant(FCShadowsPass)]];
 constant bool MorphEnabled    [[function_constant(FCMorphEnabled)]];
 constant bool MorphNormals    [[function_constant(FCMorphNormals)]];
-constant bool MorphTangents   [[function_constant(FCMorphTangents)]];
 constant bool JointTransformsConst = VAJointIndex || VAJointIndices4;
 
 constant bool MPBaseColorMap   [[function_constant(FCBaseColorMap)]];
@@ -57,7 +56,6 @@ struct StandardVertexOut {
 struct MorphDeform {
     float3 position{0, 0, 0};
     float3 normal{0, 0, 0};
-    float3 tangent{0, 0, 0};
 };
 
 constant float PI = 3.14159265359;
@@ -164,11 +162,6 @@ MorphDeform calcMorphDeform(constant StandardVertexUniforms& uniforms,
                                         morphVerts[vertLoc + 4],
                                         morphVerts[vertLoc + 5]) * uniforms.vMorphTargetWeights[i];
             }
-            if (MorphTangents) {
-                result.tangent += float3(morphVerts[vertLoc + 6],
-                                         morphVerts[vertLoc + 7],
-                                         morphVerts[vertLoc + 8]) * uniforms.vMorphTargetWeights[i];
-            }
         }
     }
 
@@ -186,13 +179,11 @@ vertex StandardVertexOut standard_vertex(StandardVertexIn in [[stage_in]],
 
     float3 position = in.vPosition;
     float3 normal = in.vNormal;
-    float3 tangent = in.vTangent;
 
     if (MorphEnabled) {
         MorphDeform deform = calcMorphDeform(uniforms, morphInds, morphVerts, vid);
         position += deform.position;
         normal += deform.normal;
-        tangent += deform.tangent;
     }
     
     float4x4 modelMat = uniforms.vModelMat;
