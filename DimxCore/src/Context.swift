@@ -107,6 +107,8 @@ public class Context: NSObject
                    mAppConfig.toJsonString(),
                    Int(screenSize.width),
                    Int(screenSize.height))
+        // What iOS recorded of previous runs' deaths, delivered by MetricKit now that the engine can take them.
+        CrashReports.shared.start()
     }
 
     // Every one of these is called from the engine thread. The ones that touch
@@ -157,6 +159,36 @@ public class Context: NSObject
         Renderer.initCallbacks()
         DeviceAR.initCallbacks()
         AnchorSession.initCallbacks()
+        // HTTP for the engine (res/HttpClient, IOSHttpClient): the platform's client off the
+        // engine thread, the answer handed back under the request's id through Http_onResponse.
+        // The headers come as one JSON object. A policy change is told to the web page on the
+        // main queue.
+        g_swiftEngine().pointee.httpRequest = { (id: UInt64, method: UnsafePointer<CChar>!, url: UnsafePointer<CChar>!, headersJson: UnsafePointer<CChar>!, body: UnsafePointer<CChar>!) -> Void in
+            let urlText = String(cString: url)
+            guard let parsed = URL(string: urlText) else {
+                Http_onResponse(id, 0, "", "not a url: \(urlText)")
+                return
+            }
+            var headers: [String: String] = [:]
+            if let data = String(cString: headersJson).data(using: .utf8),
+               let object = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+                headers = object
+            }
+            let text = String(cString: body)
+            let request = HttpClient.Request(method: String(cString: method), url: parsed, headers: headers, body: text.isEmpty ? nil : text.data(using: .utf8))
+            HttpClient.shared.send(request) { result in
+                switch result {
+                case .success(let response):
+                    Http_onResponse(id, Int32(response.status), String(decoding: response.body, as: UTF8.self), "")
+                case .failure(let error):
+                    Http_onResponse(id, 0, "", error.localizedDescription)
+                }
+            }
+        }
+        g_swiftEngine().pointee.telemetryPolicyChanged = { (json: UnsafePointer<CChar>!) -> Void in
+            let policy = String(cString: json)
+            DispatchQueue.main.async { Context.inst().webViewCtrl()?.notifyTelemetryPolicy(policy) }
+        }
         Texture.initCallbacks()
         Material.initCallbacks()
         Mesh.initCallbacks()

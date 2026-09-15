@@ -10,6 +10,20 @@ class IOSNativeInterface
     getAppInstanceId() {
         return window.DIMX_APP_INSTANCE_ID;
     }
+    // What the shell knows about itself for the page's telemetry (JSON text, injected at
+    // document start beside the app instance id): the app and its version, the OS, the device.
+    getAppInfo() {
+        return window.DIMX_APP_INFO;
+    }
+    // The engine's diagnostics policy at document start; changes come through
+    // window.DimxInterface.onTelemetryPolicy.
+    getTelemetryPolicy() {
+        return window.DIMX_TELEMETRY_POLICY;
+    }
+    // The holder's switch: the engine goes verbose for this many seconds, 0 ends it.
+    setDiagnostics(seconds) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_DIAGNOSTICS", seconds: Number(seconds) || 0});
+    }
     
     setWebAppHost(value) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_WEB_APP_HOST", value: value});

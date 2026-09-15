@@ -6,6 +6,9 @@
 #include "IOSDeviceAR.h"
 #include "IOSCloudAnchorSession.h"
 #include "IOSAnalyticsManager.h"
+#include "IOSHttpClient.h"
+#include <res/HttpClient.h>
+#include <telemetry/TelemetryManager.h>
 
 #include <FileSystem.h>
 #include <CrossFactory.h>
@@ -101,6 +104,7 @@ void initEngine(const char* appInstanceId,
     g_crossFactory().registerTypeOverride<Input, IOSInput>(CrossType::Input);
     g_crossFactory().registerTypeOverride<MultimediaManager, AvMultimediaManager>(CrossType::MultimediaManager);
     g_crossFactory().registerTypeOverride<AudioDevice, AlAudioDevice>(CrossType::AudioDevice);
+    g_crossFactory().registerTypeOverride<HttpClient, IOSHttpClient>(CrossType::HttpClient);
 
 
     Settings::setAppInstanceId(appInstanceId);
@@ -118,6 +122,12 @@ void initEngine(const char* appInstanceId,
                                                           /*settingsData*/ {},
                                                           /*accountData*/ {});
 
+    // The diagnostics policy as it changes, for the web view (SwiftEngine.telemetryPolicyChanged).
+    g_telemetry().addPolicyListener([](const std::string& json) {
+        if (g_swiftEngine()->telemetryPolicyChanged) {
+            g_swiftEngine()->telemetryPolicyChanged(json.c_str());
+        }
+    });
     g_engine_instance->setScreenSize(static_cast<int>(screenWidth), static_cast<int>(screenHeight));
     g_engine_instance->start();
 }

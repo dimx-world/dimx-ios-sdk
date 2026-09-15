@@ -2,6 +2,7 @@
 #define IOS_ENGINE_H_INCLUDED
 
 #include <stdbool.h>
+#include <stdint.h>
 
 //---------------------------------------------------------------
 #ifdef __cplusplus
@@ -28,6 +29,13 @@ struct SwiftEngine
     // calls it on its way into a background park, and the whole point is that
     // no GPU work is still in flight when the park is acknowledged.
     void (*waitForGpuIdle)();
+    // The engine's HTTP (res/HttpClient, IOSHttpClient): a request to send through
+    // the platform's client, answered under its id through Http_onResponse
+    // (core/HttpInterface.h). Left null, the engine has no HTTP and its telemetry
+    // reports nothing. The headers come as one JSON object.
+    void (*httpRequest)(uint64_t id, const char* method, const char* url, const char* headersJson, const char* body);
+    // The engine's diagnostics policy as it changes (telemetry/TelemetryManager), for the web view.
+    void (*telemetryPolicyChanged)(const char* policyJson);
 };
 struct SwiftEngine* g_swiftEngine();
 

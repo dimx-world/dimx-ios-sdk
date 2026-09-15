@@ -19,6 +19,11 @@ public class AppConfig
     private var mWebVersions: [String] = []
     private var mGoogleClientId: String = ""
     private var mAppleSignInEnabled: Bool = true
+    // Telemetry (the engine's TelemetryManager, posting to the platform's
+    // receiver): off unless the host app turns it on - an SDK consumer's data
+    // is theirs to send. The app name is what the receiver files it under.
+    private var mTelemetryEnabled: Bool = false
+    private var mTelemetryApp: String = "ios-sdk"
 
     public init() {}
 
@@ -77,6 +82,44 @@ public class AppConfig
         return mAppleSignInEnabled
     }
 
+    /// Turns the engine's telemetry on: crash markers, errors, session and
+    /// frame-rate records to the platform's receiver, verbose on request from
+    /// the platform's diagnostics switch. `app` names the build to the receiver
+    /// (the DimensionX app is "ios-app"; a consumer leaves the default).
+    public func setTelemetryEnabled(_ value: Bool, app: String = "ios-sdk") {
+        mTelemetryEnabled = value
+        mTelemetryApp = app
+    }
+
+    func telemetryEnabled() -> Bool {
+        return mTelemetryEnabled
+    }
+
+    /// The identity the engine reports under: this app's bundle version, the
+    /// OS, the device model - read here on the Swift side, where they are known.
+    private func telemetryJson() -> [String: Any] {
+        let info = Bundle.main.infoDictionary
+        let version = (info?["CFBundleShortVersionString"] as? String) ?? "unknown"
+        let build = (info?["CFBundleVersion"] as? String) ?? ""
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let model = withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(validatingUTF8: $0) ?? "" }
+        }
+        let osVersion = UIDevice.current.systemVersion
+        return [
+            "enabled": mTelemetryEnabled,
+            "app": mTelemetryApp,
+            // The version as the store shows it, the receiver's version label; the build beside it, never in it.
+            "version": version,
+            "build": build,
+            "platform": "ios",
+            "os": "iOS \(osVersion)",
+            "os_major": String(osVersion.split(separator: ".").first ?? ""),
+            "device_model": model
+        ]
+    }
+
     func toJsonString() -> String {
         var jsonObject: [String: Any] = [
             "back_enabled": mShowAppScreenAction != nil,
@@ -87,6 +130,7 @@ public class AppConfig
         if mDimensions.count > 0 {
             jsonObject["dimensions"] = mDimensions
         }
+        jsonObject["telemetry"] = telemetryJson()
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: jsonObject)
             let str = String(data: jsonData, encoding: .utf8)

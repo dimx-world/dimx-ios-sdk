@@ -75,6 +75,7 @@ let package = Package(
             ],
             path: "DimxCore",
             resources: [
+                .copy("PrivacyInfo.xcprivacy"),
                 .copy("src/WebInterface.js"),
                 .copy("data"),
                 .process("res")

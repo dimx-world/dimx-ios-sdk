@@ -194,9 +194,56 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "REQUEST_PERMISSIONS") {
             Context.inst().permissions().request(feature: params["feature"] as? String ?? "")
             return
+        } else if (cmd == "SET_DIAGNOSTICS") {
+            // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
+            let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0
+            Telemetry_setLocalPolicy(seconds)
+            return
         }
-
         fatalError("Unknown web command: [" + cmd + "]")
+    }
+
+    // MARK: - Telemetry
+
+    /// What the engine says of this install ({app, version, platform, os, ...}); empty JSON before the engine runs.
+    static func telemetryAppInfo() -> String {
+        return nativeString { Telemetry_appInfoJson($0) }
+    }
+
+    /// The engine's diagnostics policy ({mode, until, server_time, set_by, revision}).
+    static func telemetryPolicy() -> String {
+        return nativeString { Telemetry_policyJson($0) }
+    }
+
+    private static func nativeString(_ fill: (UnsafeMutableRawPointer) -> Void) -> String {
+        let stringObj = String_create(UnsafeRawPointer(bitPattern: 0))!
+        fill(stringObj)
+        let value = String(cString: String_cstr(stringObj))
+        String_delete(stringObj)
+        return value.isEmpty ? "{}" : value
+    }
+
+    /// A JSON text as a JavaScript string literal, so the page parses it itself.
+    static func jsStringLiteral(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+            .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+        return "'\(escaped)'"
+    }
+
+    /// The engine's policy changed (a push from the platform, or the holder's switch): the page hears it at once.
+    func notifyTelemetryPolicy(_ policyJson: String) {
+        guard webView != nil else { return }
+        let jscode = "if (window.DimxInterface && window.DimxInterface.onTelemetryPolicy) { window.DimxInterface.onTelemetryPolicy(" + WebViewCtrl.jsStringLiteral(policyJson) + ") }"
+        webView.evaluateJavaScript(jscode) { (_, error) in
+            if error != nil {
+                Logger.error("JS CALL ERROR (onTelemetryPolicy): \(String(describing: error))")
+            }
+        }
     }
 
     func startProviderSignIn(_ providerId: String) {

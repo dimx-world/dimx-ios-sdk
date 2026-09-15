@@ -28,6 +28,8 @@ extern "C" {
 #include "src/core/RaycastInterface.h"
 #include "src/core/SettingsInterface.h"
 #include "src/core/AnalyticsManagerInterface.h"
+#include "src/core/TelemetryInterface.h"
+#include "src/core/HttpInterface.h"
 
 #include "src/core/SceneInterface.h"
 #include "src/core/SkyboxInterface.h"

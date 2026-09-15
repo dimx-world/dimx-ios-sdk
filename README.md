@@ -83,3 +83,19 @@ Error: `the path does not point to a valid library: .../libdimx-core.a` - delete
 the `CONFIGURATION_BUILD_DIR` parameter in the build settings. It should be used
 from the project, not from a specific target.
 
+## Telemetry
+
+The engine can report to the DimensionX platform: a marker when a session
+ends in a crash, its errors, session and frame-rate records - and, when the
+platform's operators switch one install to verbose for a while, its full log
+stream, ending on its own. It is off unless the app turns it on:
+
+```swift
+let appConfig = AppConfig()
+appConfig.setTelemetryEnabled(true)            // reports as "ios-sdk"
+Context.initialize(window, appConfig)
+```
+
+What is sent is tied to an install id the SDK mints (never a device
+identifier) and the signed-in DimensionX account; the package's
+`PrivacyInfo.xcprivacy` declares it. Nothing is sent while it is off.
