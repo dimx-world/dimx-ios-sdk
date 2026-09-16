@@ -9,26 +9,17 @@
 import Foundation
 
 public class AppSettings {
-    static private let APP_INSTANCE_ID_KEY = "app_instance_id"
     static private let WEB_APP_HOST_KEY = "web_app_host"
     static private let WEB_VERSION_KEY = "web_version_"
-    
-    private var mAppInstanceId: String!
+
+    // The install id has a file and a class of its own: it is the one setting here
+    // that must not be restored onto another device, and the one two threads ask
+    // for at once. See AppInstanceId.
+    private let mAppInstanceId = AppInstanceId()
     private var mWebAppHost: String!
-   
+
     func appInstanceId() -> String {
-        if mAppInstanceId != nil {
-            return mAppInstanceId
-        }
-        mAppInstanceId = UserDefaults.standard.string(forKey: AppSettings.APP_INSTANCE_ID_KEY)
-        if mAppInstanceId == nil {
-            mAppInstanceId = UUID().uuidString
-            UserDefaults.standard.setValue(mAppInstanceId, forKey: AppSettings.APP_INSTANCE_ID_KEY)
-            Logger.info("Generated new app_instance_id: \(String(describing: mAppInstanceId))")
-        } else {
-            Logger.info("Loaded existing app_instance_id: \(String(describing: mAppInstanceId))")
-        }
-        return mAppInstanceId
+        return mAppInstanceId.id()
     }
 
     public func webAppHost() -> String {
