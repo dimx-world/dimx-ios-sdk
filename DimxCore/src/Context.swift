@@ -216,6 +216,13 @@ public class Context: NSObject
     // the handshake here is synchronous. engineEnterBackground blocks.
     @objc private func appDidEnterBackground() {
         Logger.info("Context: app did enter background")
+        if mARViewCtrl != nil && mARViewCtrl.isCurrentlyVisible {
+            // Android prints this from ARActivity.onPause, which a backgrounding
+            // fires too; here viewWillDisappear does not, so it is said here.
+            Logger.info("================================================================================")
+            Logger.info("Swift ARViewCtrl: exiting AR mode (app backgrounded)")
+            Logger.info("================================================================================")
+        }
         engineEnterBackground()
     }
 

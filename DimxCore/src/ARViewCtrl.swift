@@ -102,6 +102,9 @@ class ARViewCtrl: UIViewController, UITextInputTraits {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        Logger.info("================================================================================")
+        Logger.info("Swift ARViewCtrl: exiting AR mode")
+        Logger.info("================================================================================")
         isCurrentlyVisible = false
 
         // Off the screen first, then the layer: the loop leaves live mode on its
@@ -136,6 +139,9 @@ class ARViewCtrl: UIViewController, UITextInputTraits {
         pendingSettingsData = ""
         pendingAccountData = ""
 
+        Logger.info("================================================================================")
+        Logger.info("Swift ARViewCtrl: entering AR mode")
+        Logger.info("================================================================================")
         Logger.info("ARViewCtrl: screen resume, session url [\(url)]")
         Context.inst().reloadARSession(url, settingsData, accountData)
     }

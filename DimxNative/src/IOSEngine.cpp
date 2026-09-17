@@ -136,13 +136,19 @@ void reloadEngineSession(const char* url, const char* settingsData, const char* 
 {
     if (!g_engine_instance) { return; }
 
+    LOGI("--------------------------------------------------------------------------------");
+    LOGI("C++ IOSEngine: entering AR mode");
+    LOGI("--------------------------------------------------------------------------------");
+
     // Deferred to the engine thread: this reloads settings, the account and the
     // world, all of which belong to it. AfterInit keeps it in order while the
     // engine is still starting up - the same as AndEngine::onActivityResume.
     g_engine_instance->pushEvent([url = std::string(url),
                                   settingsData = std::string(settingsData),
                                   accountData = std::string(accountData)] {
+        LOGI("-------------------- C++ IOSEngine thread: entering AR mode");
         AppUtils::mobileSessionReload(url, settingsData, accountData);
+        LOGI("-------------------- C++ IOSEngine thread: entering AR mode - done");
     }, ExecOpts::AfterInit);
 }
 
@@ -472,7 +478,19 @@ void IOSEngine::updateLiveMode()
 {
     // Live mode needs somewhere to draw, a screen showing it, and an app that is
     // allowed to touch the GPU at all.
-    setLiveMode(mSurfaceAttached && mScreenVisible && mAppInForeground);
+    const bool live = mSurfaceAttached && mScreenVisible && mAppInForeground;
+
+    // The counterpart of AndEngine's onActivityResume/onActivityPause banners.
+    // iOS has no single activity pause: the screen going away, the layer being
+    // taken back and the app backgrounding each arrive on their own, so the line
+    // is printed here, where the three are weighed together.
+    if (live != liveMode()) {
+        LOGI("-------------------- C++ IOSEngine: " << (live ? "entering" : "exiting")
+             << " AR mode [surface " << mSurfaceAttached.load()
+             << " screen " << mScreenVisible.load()
+             << " foreground " << mAppInForeground.load() << "]");
+    }
+    setLiveMode(live);
 }
 
 //---------------------------- Screen lifecycle ------------------------------//
