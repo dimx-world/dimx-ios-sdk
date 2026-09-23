@@ -603,6 +603,14 @@ void IOSEngine::processCommand(const std::string& command, ConfigPtr arguments)
         return;
     }
 
+    // The platform's verdict on this build, for the app to action (TelemetryManager).
+    if (command == "CLIENT_UPDATE_REQUEST") {
+        if (g_swiftEngine()->clientUpdate) {
+            g_swiftEngine()->clientUpdate(args.toString().c_str());
+        }
+        return;
+    }
+
     if (command == "BEACONS_STOP_SCANNING") {
         if (g_swiftEngine()->beaconsStopScanning) {
             g_swiftEngine()->beaconsStopScanning();

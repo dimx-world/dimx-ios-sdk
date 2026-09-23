@@ -33,6 +33,18 @@ public class Context: NSObject
     private var mWindow: UIWindow!
 
     private var mARViewCtrl: ARViewCtrl!
+    /**
+     * The one handler of the platform's verdict on this build - told whenever
+     * it changes, and at once of the one that stands, if one does, when it is
+     * set; nil removes it.
+     */
+    public var clientUpdateHandler: ((ClientUpdate) -> Void)? {
+        didSet {
+            if let handler = clientUpdateHandler, let update = clientUpdate {
+                handler(update)
+            }
+        }
+    }
     private var mWebViewCtrl: WebViewCtrl?
 
     // The engine thread reads the interface orientation every frame (camera
@@ -199,6 +211,10 @@ public class Context: NSObject
             let policy = String(cString: json)
             DispatchQueue.main.async { Context.inst().webViewCtrl()?.notifyTelemetryPolicy(policy) }
         }
+        g_swiftEngine().pointee.clientUpdate = { (json: UnsafePointer<CChar>!) -> Void in
+            let update = ClientUpdate(json: String(cString: json))
+            DispatchQueue.main.async { Context.inst().clientUpdateReceived(update) }
+        }
         Texture.initCallbacks()
         Material.initCallbacks()
         Mesh.initCallbacks()
@@ -291,6 +307,50 @@ public class Context: NSObject
         mAppConfig.showAppScreenAction()?(args)
     }
 
+    /**
+     * The platform's verdict on this build as the engine last handed it over,
+     * with every handshake answer - or nil while it has nothing to say, or has
+     * not answered yet; `updateStatus` tells those two apart.
+     */
+    public private(set) var clientUpdate: ClientUpdate?
+    private var mUpdateAnswered = false
+
+    /// Where this build stands: `.unknown` until a registration has been answered on this run, `.none` when it said nothing.
+    public var updateStatus: UpdateStatus {
+        if let update = clientUpdate {
+            return update.isRequired ? .required(update) : .advisory(update)
+        }
+        return mUpdateAnswered ? .none : .unknown
+    }
+
+    /// From the engine (CLIENT_UPDATE_REQUEST), on the main queue: the verdict a handshake answer carried.
+    func clientUpdateReceived(_ update: ClientUpdate?) {
+        let previous = clientUpdate
+        clientUpdate = update
+        mUpdateAnswered = true
+        guard let update = update, update.json != previous?.json else {
+            return   // nothing to say, or the same verdict again - a reconnect - is not news
+        }
+        clientUpdateHandler?(update)
+    }
+
+    /// What a host app that handles nothing itself sees: the platform's wording,
+    /// and the store when it named one - the same shape as the camera-denied alert.
+    private func presentUpdateRequiredAlert(_ update: ClientUpdate) {
+        guard let top = topMostViewController() else {
+            Logger.error("Client update: no view controller to present the alert on")
+            return
+        }
+        let alert = UIAlertController(title: "Update required", message: update.displayMessage, preferredStyle: .alert)
+        if let link = update.url, let storeUrl = URL(string: link) {
+            alert.addAction(UIAlertAction(title: "Update", style: .default) { _ in
+                UIApplication.shared.open(storeUrl)
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Not now", style: .cancel))
+        top.present(alert, animated: true)
+    }
+
     /// Opens the AR screen once the user has granted what it needs, asking for
     /// whatever is still undecided. Only the camera is required: a refusal
     /// shows an alert with a way to Settings, then runs `onDenied` - a deep
@@ -299,7 +359,21 @@ public class Context: NSObject
     /// the screen still opens, with a toast saying it cannot find nearby
     /// content. Beacon ranging is only logged when Bluetooth is off.
     public func showARScreen(_ url: String, _ settingsData: String, _ accountData: String,
-                             onDenied: (() -> Void)? = nil) {
+                             onDenied: (() -> Void)? = nil,
+                             onUpdateRequired: ((ClientUpdate) -> Void)? = nil) {
+        // A build the platform has refused opens nothing: the screens talk to
+        // a backend that has moved past this version, so the holder is told to
+        // update instead. The host app decides how - it hears the error, and
+        // without a handler the SDK says it itself.
+        if let update = clientUpdate, update.isRequired {
+            Logger.warn("AR screen refused: \(DimxError.updateRequired(update).localizedDescription)")
+            if let handler = onUpdateRequired {
+                handler(update)
+            } else {
+                presentUpdateRequiredAlert(update)
+            }
+            return
+        }
         mPermissions.requestAR { [self] outcome in
             if !outcome.camera {
                 Logger.warn("AR screen refused: camera access denied")

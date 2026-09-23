@@ -38,6 +38,13 @@ struct SwiftEngine
     void (*httpRequest)(uint64_t id, const char* method, const char* url, const char* headersJson, const char* body);
     // The engine's diagnostics policy as it changes (telemetry/TelemetryManager), for the web view.
     void (*telemetryPolicyChanged)(const char* policyJson);
+    // The platform's verdict on this build, when a handshake answer carries
+    // one (res/ResourceInterface), JSON:
+    // {severity: Advisory|Required, reason, min_version, min_build, url, message,
+    // remind_after_seconds}. `required` is an app that must not go on: its
+    // requests fail from here, and the SDK refuses its screens with
+    // DimxError.updateRequired.
+    void (*clientUpdate)(const char* updateJson);
 };
 struct SwiftEngine* g_swiftEngine();
 

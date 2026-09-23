@@ -83,6 +83,38 @@ Error: `the path does not point to a valid library: .../libdimx-core.a` - delete
 the `CONFIGURATION_BUILD_DIR` parameter in the build settings. It should be used
 from the project, not from a specific target.
 
+## When a build must update
+
+Every connection the SDK opens begins by telling the platform what this
+build is - app, version, build number and the protocol it speaks - and the
+platform answers with its verdict on the build, if it has one. Nothing is
+sent about the holder, and this happens whether or not telemetry is on.
+Nothing waits for it either; the verdict arrives at the one handler the app sets:
+
+```swift
+Context.inst().clientUpdateHandler = { update in
+    if update.isRequired { /* stop and say so */ }
+    else if update.shouldPrompt() { /* a nudge, at your own pace */ update.markPrompted() }
+}
+```
+
+`required` is a rare case: the platform has moved past this build. The SDK
+refuses every request from then on (`E1003`), and `showARScreen` opens
+nothing - it runs `onUpdateRequired:` when the app passed one, and shows its
+own alert with the store link when it did not:
+
+```swift
+Context.inst().showARScreen(url, settings, account, onUpdateRequired: { update in
+    // update.displayMessage, update.url - the store page, when the platform named one
+})
+```
+
+`Context.updateStatus` says where the build stands at any time - `.unknown`
+until the platform has answered on this run (offline, or not yet connected),
+`.none`, `.advisory(update)`, `.required(update)` - and `Context.clientUpdate`
+is the verdict itself, or nil. `DimxError.updateRequired(ClientUpdate)` is
+the same verdict as an error, for code that would rather catch than listen.
+
 ## Telemetry
 
 The engine can report to the DimensionX platform: a marker when a session
