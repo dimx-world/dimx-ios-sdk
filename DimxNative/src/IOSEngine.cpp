@@ -253,7 +253,7 @@ void requestBeaconStatuses(const char* uuid)
     if (!g_engine_instance || !uuid) { return; }
 
     g_engine_instance->pushEvent([uuid = std::string(uuid)] {
-        ConfigPtr response = g_beacons().getStatuses(uuid);
+        VariantPtr response = g_beacons().getStatuses(uuid);
         g_engine().processCommand("UPDATE_BEACON_STATUSES", std::move(response));
     }, ExecOpts::AfterInit);
 }
@@ -286,12 +286,12 @@ void cppConvertAppUrlToWebUrl(const char* webAppHost, const char* appUrl, void* 
 
 //---------------------------------------------------------------------
 
-IOSEngine::IOSEngine(ConfigPtr config)
+IOSEngine::IOSEngine(VariantPtr config)
 : Engine(config)
 {
-    const double idleFps = this->config().get("engine.idle_fps", 10.0);
+    const double idleFps = this->config().at("engine.idle_fps", Variant::Empty).getOr(10.0);
     mIdleFrameSec = 1.0 / std::max(idleFps, 1.0);
-    mBackgroundDrainSec = this->config().get("engine.background_drain_sec", mBackgroundDrainSec);
+    mBackgroundDrainSec = this->config().at("engine.background_drain_sec", Variant::Empty).getOr(mBackgroundDrainSec);
 }
 
 IOSEngine::~IOSEngine()
@@ -589,12 +589,12 @@ void IOSEngine::enterForeground()
 
 //------------------------------ Engine commands -----------------------------//
 
-void IOSEngine::processCommand(const std::string& command, ConfigPtr arguments)
+void IOSEngine::processCommand(const std::string& command, VariantPtr arguments)
 {
-    // Base now hands arguments as a ConfigPtr (may be null); read keys off a
+    // Base now hands arguments as a VariantPtr (may be null); read keys off a
     // null-safe empty node instead of a raw string.
-    static const Config kEmpty;
-    const Config& args = arguments ? *arguments : kEmpty;
+    static const Variant kEmpty;
+    const Variant& args = arguments ? *arguments : kEmpty;
 
     if (command == "BEACONS_REGISTER_UUID") {
         if (g_swiftEngine()->beaconsRegisterUuid) {

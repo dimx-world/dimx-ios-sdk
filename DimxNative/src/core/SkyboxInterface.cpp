@@ -1,7 +1,7 @@
 #include "SkyboxInterface.h"
 #include <Skybox.h>
 #include <Texture.h>
-#include <ecs/Object.h>
+#include <ecs/Entity.h>
 
 const void* Skybox_irradianceMap(const void* ptr)
 {

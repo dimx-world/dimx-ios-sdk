@@ -38,8 +38,8 @@ bool DeviceAR_qrScanEnabled();
 class IOSDeviceAR: public DeviceAR
 {
 public:
-    void initialize(const Config& config) override;
-    void postInit(const Config& config) override;
+    void initialize(const Variant& config) override;
+    void postInit(const Variant& config) override;
     void preFrameUpdate(const FrameContext& frameContext) override;
     void inFrameUpdate(const FrameContext& frameContext) override;
 

@@ -1,7 +1,7 @@
 #include "FrameContextInterface.h"
 #include <FrameContext.h>
 #include <Lighting.h>
-#include <ecs/Object.h>
+#include <ecs/Entity.h>
 
 double FrameContext_now(const void* ptr)
 {

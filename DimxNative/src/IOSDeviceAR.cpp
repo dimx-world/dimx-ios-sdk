@@ -13,14 +13,14 @@ bool DeviceAR_qrScanEnabled()
     return g_deviceAR().qrScanEnabled();
 }
 
-void IOSDeviceAR::initialize(const Config& config)
+void IOSDeviceAR::initialize(const Variant& config)
 {
     DeviceAR::initialize(config); 
 
     g_swiftDeviceAR()->initialize(&config);
 }
 
-void IOSDeviceAR::postInit(const Config& config)
+void IOSDeviceAR::postInit(const Variant& config)
 {
     DeviceAR::postInit(config); 
     g_swiftDeviceAR()->postInit(&config);

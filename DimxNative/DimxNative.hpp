@@ -8,7 +8,7 @@ extern "C" {
 #include "src/ShaderCommon.h"
 
 #include "src/core/EnumsInterface.h"
-#include "src/core/ConfigInterface.h"
+#include "src/core/VariantInterface.h"
 #include "src/core/TextureInterface.h"
 #include "src/core/MeshInterface.h"
 #include "src/core/MeshMorphInterface.h"

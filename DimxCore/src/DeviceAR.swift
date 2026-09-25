@@ -105,8 +105,8 @@ class DeviceAR: NSObject, ARSessionDelegate
 
     func initialize(configPtr: UnsafeRawPointer) {
         Logger.info("DeviceAR initalize")
-        mCameraMinZ = Config_getFloat(getEngineConfig(), "camera.minz")
-        mCameraMaxZ = Config_getFloat(getEngineConfig(), "camera.maxz")
+        mCameraMinZ = Variant_getFloat(getEngineConfig(), "camera.minz")
+        mCameraMaxZ = Variant_getFloat(getEngineConfig(), "camera.maxz")
         
         configuration.maximumNumberOfTrackedImages = 10
         if Settings_iosPlaneDetection() {

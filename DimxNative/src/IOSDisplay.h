@@ -21,7 +21,7 @@ class IOSDisplay : public Display
 public:
     IOSDisplay();
     virtual ~IOSDisplay();
-    void initialize(const Config& config) override;
+    void initialize(const Variant& config) override;
     void deinitialize() override;
     void update(const FrameContext& frameContext) override;
     void endFrame(const FrameContext& frameContext) override;

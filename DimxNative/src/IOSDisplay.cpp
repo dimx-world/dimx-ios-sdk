@@ -17,7 +17,7 @@ IOSDisplay::~IOSDisplay()
 {
 }
 
-void IOSDisplay::initialize(const Config& config)
+void IOSDisplay::initialize(const Variant& config)
 {
     Display::initialize(config);
 

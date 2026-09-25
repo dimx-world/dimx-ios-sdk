@@ -1,6 +1,6 @@
 #include "TextureInterface.h"
 #include <Texture.h>
-#include <ecs/Object.h>
+#include <ecs/Entity.h>
 #include <File.h>
 
 long Texture_textureType(const void* ptr)

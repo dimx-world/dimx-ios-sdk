@@ -2,7 +2,7 @@
 #include "SimdConvert.h"
 #include <render/Material.h>
 #include <render/NativeMaterial.h>
-#include <ecs/Object.h>
+#include <ecs/Entity.h>
 
 bool Material_transparent(const void* ptr)
 {

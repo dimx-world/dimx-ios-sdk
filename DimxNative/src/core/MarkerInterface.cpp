@@ -1,6 +1,6 @@
 #include "MarkerInterface.h"
 #include <tracking/Marker.h>
-#include <ecs/Object.h>
+#include <ecs/Entity.h>
 #include <DeviceAR.h>
 
 void TrackingResult_assign(void* ptr, bool tracked, const void* const transform)

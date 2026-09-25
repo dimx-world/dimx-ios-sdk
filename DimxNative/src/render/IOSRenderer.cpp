@@ -124,14 +124,14 @@ void Renderer_drawPose(bool debugBuffer, const void* transformPtr, float size)
     lines.drawPose(transform, size);
 }
 
-void IOSRenderer::initialize(const Config& config)
+void IOSRenderer::initialize(const Variant& config)
 {
     Renderer::initialize(config);
 
     g_swiftRenderer()->initialize(&config);
 }
 
-void IOSRenderer::postInit(const Config& config, CounterPtr counter)
+void IOSRenderer::postInit(const Variant& config, CounterPtr counter)
 {
     Renderer::postInit(config, counter);
     g_swiftRenderer()->postInit(&config);

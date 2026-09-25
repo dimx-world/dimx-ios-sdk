@@ -1,7 +1,7 @@
 #include "SceneInterface.h"
 #include <Lighting.h>
 #include <Scene.h>
-#include <ecs/Object.h>
+#include <ecs/Entity.h>
 #include <Skybox.h>
 
 unsigned long Scene_id(const void* ptr)

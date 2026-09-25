@@ -50,8 +50,8 @@ void testCallback(TestFunc func);
 class IOSRenderer: public Renderer
 {
 public:
-    void initialize(const Config& config) override;
-    void postInit(const Config& config, CounterPtr counter) override;
+    void initialize(const Variant& config) override;
+    void postInit(const Variant& config, CounterPtr counter) override;
     void deinitialize() override;
     
     void beginFrame(const FrameContext& frameContext) override;

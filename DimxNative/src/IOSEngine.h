@@ -121,7 +121,7 @@ class IOSEngine: public Engine
 public:
     using TimePoint = std::chrono::steady_clock::time_point;
 
-    IOSEngine(ConfigPtr config);
+    IOSEngine(VariantPtr config);
     ~IOSEngine() override;
 
     // Seeded from UIScreen before the thread starts, read by IOSDisplay on it.
@@ -140,7 +140,7 @@ public:
     // from any thread.
     void wakeLoop();
 
-    void processCommand(const std::string& command, ConfigPtr arguments = {}) override;
+    void processCommand(const std::string& command, VariantPtr arguments = {}) override;
 
     void setSurfaceAttached(bool attached);
     void setScreenVisible(bool visible);
