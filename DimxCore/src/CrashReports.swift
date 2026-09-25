@@ -61,8 +61,11 @@ final class CrashReports: NSObject, MXMetricManagerSubscriber {
     /**
      The crashing thread's frames, innermost first, off the tree's JSON: `callStacks`,
      the one marked `threadAttributed` (else the first), its `callStackRootFrames`
-     chained inward through `subFrames`. A frame is the binary, the offset into its
-     text segment and its UUID.
+     chained through `subFrames`. MetricKit's root frame is the innermost one - the
+     `__pthread_kill` of a crash - and each `subFrames` step goes outward to the
+     thread's start, so the chain is kept as it comes: reversing it, as this did
+     until 2026-09-25, put `thread_start` first on every record. A frame is the
+     binary, the offset into its text segment and its UUID.
      */
     private static func frames(of tree: MXCallStackTree) -> [[String: Any]] {
         guard let parsed = try? JSONSerialization.jsonObject(with: tree.jsonRepresentation()) as? [String: Any],
@@ -76,7 +79,7 @@ final class CrashReports: NSObject, MXMetricManagerSubscriber {
             chain.append(current)
             frame = (current["subFrames"] as? [[String: Any]])?.first
         }
-        return chain.reversed().map { current in
+        return chain.map { current in
             [
                 "m": (current["binaryName"] as? String) ?? "",
                 "o": (current["offsetIntoBinaryTextSegment"] as? Int) ?? 0,
