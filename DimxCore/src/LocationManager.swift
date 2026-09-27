@@ -22,7 +22,14 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         super.init()
         mManager.delegate = self
         mManager.desiredAccuracy = kCLLocationAccuracyBest
-        mManager.distanceFilter = 1.0
+        // Every fix CoreLocation has, as Android's LocationProvider takes every
+        // fix from its fused client: no displacement gate, since the engine's
+        // GeolocationManager already keeps a "significant move" subscriber list
+        // for the consumers that want one, while the web view's position dot is
+        // on its every-fix list and a gate on top of GPS jitter made the dot
+        // move in steps. The filter suppressed delivery only; the receiver runs
+        // at this accuracy either way, so nothing is saved by it.
+        mManager.distanceFilter = kCLDistanceFilterNone
         mManager.startUpdatingLocation()
     }
     
