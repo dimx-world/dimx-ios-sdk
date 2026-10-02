@@ -19,7 +19,7 @@ const char* Marker_name(const void* ptr)
 
 const void* Marker_image(const void* ptr)
 {
-    return &reinterpret_cast<const Marker*>(ptr)->image()->get<Texture>();
+    return reinterpret_cast<const Marker*>(ptr)->image().get();
 }
 
 float Marker_width(const void* ptr)

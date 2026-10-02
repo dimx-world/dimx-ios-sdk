@@ -1,6 +1,5 @@
 #include "TextureInterface.h"
 #include <Texture.h>
-#include <ecs/Entity.h>
 #include <File.h>
 
 long Texture_textureType(const void* ptr)
@@ -61,13 +60,13 @@ long Texture_bytesPerPixel(const void* ptr)
 const void* Texture_fileData(const void* ptr)
 {
     const Texture* tex = reinterpret_cast<const Texture*>(ptr);
-    return tex->file() ? tex->file()->get<File>().buffer()->data() : nullptr;
+    return tex->file() ? tex->file()->buffer()->data() : nullptr;
 }
 
 long Texture_fileDataSize(const void* ptr)
 {
     const Texture* tex = reinterpret_cast<const Texture*>(ptr);
-    return tex->file() ? tex->file()->get<File>().buffer()->size() : 0;
+    return tex->file() ? tex->file()->buffer()->size() : 0;
 }
 
 const void* Texture_imageData(const void* ptr)
