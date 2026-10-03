@@ -41,23 +41,27 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     private var childWebViewCtrls: [ChildWebViewCtrl] = []
 
 
+    /// Shows the app at `url` - the app's own form, `https://go.dimx.world/...`, or empty for
+    /// the page as it is (the way back from the AR screen). The first time the page is loaded
+    /// at it; after that the page is asked to navigate there itself (DimxInterface.openAppUrl),
+    /// keeping its state and its one history, and is loaded only when it cannot take the url -
+    /// still loading, or from before it could.
     func loadWebUrl(_ url: String) {
-        Logger.info("loadAppUrl: \(url)")
-        var webUrl = Context.inst().convertAppUrlToWebUrl(url)
-        Logger.info("loadAppUrl converted: \(webUrl)")
-        
+        Logger.info("loadWebUrl: \(url)")
+
         if firstTimeUrlLoad {
             firstTimeUrlLoad = false
-    
-            if (webUrl.isEmpty) {
+            checkWebVersions()
+            var webUrl = Context.inst().convertAppUrlToWebUrl(url)
+            if webUrl.isEmpty {
                 webUrl = Context.inst().settings().webAppHost()
             }
-            checkWebVersions()
+            Logger.info("loadWebUrl: first load [\(webUrl)]")
+            webView.load(URLRequest(url: URL(string: webUrl)!))
+            return
         }
 
-        if (!webUrl.isEmpty) {
-            webView.load(URLRequest(url: URL(string: webUrl)!))
-        } else {
+        if url.isEmpty {
             let jscode =
                 """
                 if (window.DimxInterface && window.DimxInterface.reloadAccount) {
@@ -70,8 +74,24 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
                     Logger.error("JS CALL ERROR: \(String(describing: error))")
                 }
             }
+            return
         }
-        
+
+        let jscode = "window.DimxInterface && window.DimxInterface.openAppUrl ? window.DimxInterface.openAppUrl(" + WebViewCtrl.jsStringLiteral(url) + ") : false"
+        webView.evaluateJavaScript(jscode) { [weak self] (result, error) in
+            guard let self = self else { return }
+            // A JavaScript boolean arrives as an NSNumber.
+            let taken = (result as? NSNumber)?.boolValue ?? (result as? Bool ?? false)
+            if error == nil && taken {
+                Logger.info("loadWebUrl: the page took [\(url)]")
+                return
+            }
+            let webUrl = Context.inst().convertAppUrlToWebUrl(url)
+            Logger.info("loadWebUrl: the page could not take [\(url)] - loading [\(webUrl)]")
+            if let target = URL(string: webUrl) {
+                self.webView.load(URLRequest(url: target))
+            }
+        }
     }
     
     override func loadView() {
@@ -113,6 +133,11 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         webView = WKWebView(frame: containerView.bounds, configuration: config)
         webView.uiDelegate = self
         webView.navigationDelegate = self
+        // The edge swipe is the page's one history - the page's and the dimension app's,
+        // since the app's route is in the page's URL - so it steps back the way the
+        // page's own arrow does. The page is one document; nothing else is ever loaded
+        // over it (loadWebUrl), so the swipe cannot land on an older page.
+        webView.allowsBackForwardNavigationGestures = true
         if #available(iOS 16.4, *) {
             webView.isInspectable = true
         } else {
