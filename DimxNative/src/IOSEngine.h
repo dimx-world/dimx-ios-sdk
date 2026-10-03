@@ -72,6 +72,11 @@ const void* getEngineConfig();
 void engineSetSurfaceAttached(bool attached);
 void engineSetScreenVisible(bool visible);
 
+// The Live View cover's background (engine.json), rgba in 0..1, for the AR
+// screen's stale-frame cover: what shows until the engine's first frame brings
+// the cover itself. Readable as soon as the engine exists.
+void engineLiveViewCoverBackground(float* rgba);
+
 // App lifecycle. engineEnterBackground BLOCKS until the update loop has stopped
 // and the GPU has drained - see IOSEngine::enterBackground.
 void engineEnterBackground();

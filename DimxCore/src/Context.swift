@@ -409,8 +409,13 @@ public class Context: NSObject
             return
         }
 
-        mWindow.rootViewController!.dismiss(animated: false)
-        mWindow.rootViewController!.present(mARViewCtrl, animated: false, completion: nil)
+        // The AR screen cross-fades in over the web screen, showing the engine's Live
+        // View cover (LiveViewCover in core) until the camera's first frame, instead of
+        // replacing it in one frame. The camera starts meanwhile.
+        UIView.transition(with: mWindow, duration: 0.3, options: [.transitionCrossDissolve], animations: { [self] in
+            mWindow.rootViewController!.dismiss(animated: false)
+            mWindow.rootViewController!.present(mARViewCtrl, animated: false, completion: nil)
+        })
     }
 
     public func showWebScreen(_ webUrl: String) {

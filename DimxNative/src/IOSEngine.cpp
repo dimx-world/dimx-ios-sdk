@@ -1,3 +1,4 @@
+#include <LiveViewCover.h>
 #include "IOSEngine.h"
 
 #include "IOSDisplay.h"
@@ -173,6 +174,12 @@ void engineSetScreenVisible(bool visible)
 {
     if (!g_engine_instance) { return; }
     g_engine_instance->setScreenVisible(visible);
+}
+
+void engineLiveViewCoverBackground(float* rgba)
+{
+    const Vec4 c = LiveViewCover::configuredBackground(g_config());
+    rgba[0] = c.x; rgba[1] = c.y; rgba[2] = c.z; rgba[3] = c.w;
 }
 
 void engineEnterBackground()

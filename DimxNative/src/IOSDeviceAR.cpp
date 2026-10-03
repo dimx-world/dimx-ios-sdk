@@ -13,6 +13,16 @@ bool DeviceAR_qrScanEnabled()
     return g_deviceAR().qrScanEnabled();
 }
 
+void DeviceAR_setCameraFeedWanted(bool wanted)
+{
+    g_deviceAR().setCameraFeedWanted(wanted);
+}
+
+void DeviceAR_setCameraFrameReady(void)
+{
+    g_deviceAR().setCameraFrameReady();
+}
+
 void IOSDeviceAR::initialize(const Variant& config)
 {
     DeviceAR::initialize(config); 

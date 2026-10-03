@@ -27,6 +27,11 @@ struct SwiftDeviceAR* g_swiftDeviceAR();
 
 // Swift-side query for the engine's passive-QR-scan gate (DeviceAR::qrScanEnabled()).
 bool DeviceAR_qrScanEnabled();
+// The camera feed behind the AR screen, for the engine's Live View cover
+// (DeviceAR::setCameraFeedWanted, setCameraFrameReady): asked for when the
+// screen starts the session, its first frame as ARKit delivers it.
+void DeviceAR_setCameraFeedWanted(bool wanted);
+void DeviceAR_setCameraFrameReady(void);
 #ifdef __cplusplus
 } // extern "C"
 #endif // __cplusplus

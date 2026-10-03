@@ -69,7 +69,11 @@ class ARViewCtrl: UIViewController, UITextInputTraits {
         guard staleFrameCover == nil else { return }
 
         let cover = UIView(frame: view.bounds)
-        cover.backgroundColor = .black
+        // The engine's Live View cover's background (engine.json), since the cover
+        // itself replaces this a frame later.
+        var rgba: [Float] = [0, 0, 0, 1]
+        engineLiveViewCoverBackground(&rgba)
+        cover.backgroundColor = UIColor(red: CGFloat(rgba[0]), green: CGFloat(rgba[1]), blue: CGFloat(rgba[2]), alpha: CGFloat(rgba[3]))
         cover.isOpaque = true
         cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         // Purely visual: it must never eat a touch, however briefly it is up.

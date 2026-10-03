@@ -46,6 +46,10 @@ class DeviceAR: NSObject, ARSessionDelegate
     // (the main queue), while the engine thread reads them every frame and
     // creates and deletes anchors from its own event handlers.
     private let mSessionLock = NSLock()
+    // Whether this session's first frame has been reported to the engine, for the
+    // Live View cover; under mSessionLock, set from the ARKit delegate thread.
+    private var mFirstFrameReported = false
+
     private var mCurrentFrame: ARFrame?
     private var anchors = [AnchorInfo?]()
 
@@ -151,6 +155,7 @@ class DeviceAR: NSObject, ARSessionDelegate
     // appearance and by Context.reloadARSession.
     func pauseSession() {
         session.pause()
+        DeviceAR_setCameraFeedWanted(false)
 
         mSessionLock.lock()
         mCurrentFrame = nil
@@ -167,6 +172,12 @@ class DeviceAR: NSObject, ARSessionDelegate
         qrScanner.resetDedupe()
         configuration.detectionImages.removeAll()
         session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+
+        // The Live View cover is up from here until this session's first frame.
+        mSessionLock.lock()
+        mFirstFrameReported = false
+        mSessionLock.unlock()
+        DeviceAR_setCameraFeedWanted(true)
     }
 
     func preFrameUpdate(frameContextPtr: UnsafeRawPointer) {
@@ -231,7 +242,12 @@ class DeviceAR: NSObject, ARSessionDelegate
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         mSessionLock.lock()
         mCurrentFrame = frame
+        let firstFrame = !mFirstFrameReported
+        mFirstFrameReported = true
         mSessionLock.unlock()
+        if firstFrame {
+            DeviceAR_setCameraFrameReady()
+        }
 
         qrScanner.handle(frame: frame, interfaceOrientation: Context.inst().getInterfaceOrientation())
     }
