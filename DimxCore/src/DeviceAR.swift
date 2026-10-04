@@ -93,10 +93,6 @@ class DeviceAR: NSObject, ARSessionDelegate
             (id: Int) -> () in
              DeviceAR.instance.deleteAnchor(id)
         }
-        g_swiftDeviceAR().pointee.scanQRCode = {
-            (outBuffer: Optional<UnsafeMutableRawPointer>, bufSize: Int) -> () in
-            DeviceAR.instance.scanQRCode(outBuffer: outBuffer!, bufSize: bufSize)
-        }
         g_swiftDeviceAR().pointee.setQRScanEnabled = {
             (enabled: Bool) -> () in
             DeviceAR.instance.qrScanner.setEnabled(enabled)
@@ -178,6 +174,21 @@ class DeviceAR: NSObject, ARSessionDelegate
         mFirstFrameReported = false
         mSessionLock.unlock()
         DeviceAR_setCameraFeedWanted(true)
+    }
+
+    // A failed or interrupted session delivers no frames: the screen holds its
+    // last image. Said in the log, which is otherwise silent about it. Main
+    // queue, as every delegate call.
+    func session(_ session: ARSession, didFailWithError error: Error) {
+        Logger.error("DeviceAR: the AR session failed: \(error)")
+    }
+
+    func sessionWasInterrupted(_ session: ARSession) {
+        Logger.warn("DeviceAR: the AR session was interrupted")
+    }
+
+    func sessionInterruptionEnded(_ session: ARSession) {
+        Logger.info("DeviceAR: the AR session interruption ended")
     }
 
     func preFrameUpdate(frameContextPtr: UnsafeRawPointer) {
@@ -438,22 +449,6 @@ class DeviceAR: NSObject, ARSessionDelegate
         runSessionOnMain { session, _ in session.remove(anchor: anchor) }
     }
 
-    func scanQRCode(outBuffer: UnsafeMutableRawPointer, bufSize: Int) {
-        let pixelBuffer = currentFrame()?.capturedImage;
-        if (pixelBuffer != nil) {
-            CVPixelBufferLockBaseAddress(pixelBuffer!, CVPixelBufferLockFlags.readOnly)
-            // The captured image comes in YCbCr format (also called YUV420)
-            // We take the first plane (luminance) as it give as a grayscale image
-            Vision_decodeQRCode(CVPixelBufferGetWidthOfPlane(pixelBuffer!, 0),
-                                CVPixelBufferGetHeightOfPlane(pixelBuffer!, 0),
-                                CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer!, 0),
-                                0, // ImageFormat - always ImageFormat::YUV420
-                                CVPixelBufferGetBaseAddressOfPlane(pixelBuffer!, 0),
-                                outBuffer, bufSize);
-            CVPixelBufferUnlockBaseAddress(pixelBuffer!, CVPixelBufferLockFlags.readOnly)
-        }
-    }
-    
     // The one ARSession call still made straight from the engine thread. It is a
     // read-only query and has to return a result to the caller, so it cannot be
     // handed to the main queue the way the mutations above are. See the note in

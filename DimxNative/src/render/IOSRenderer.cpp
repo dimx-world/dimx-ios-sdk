@@ -12,6 +12,21 @@ struct SwiftRenderer* g_swiftRenderer()
     return &callbacks;
 }
 
+bool Renderer_capturing()
+{
+    return g_renderer().capturing();
+}
+
+bool Renderer_photoRequested()
+{
+    return static_cast<IOSRenderer&>(g_renderer()).wantsPhoto();
+}
+
+void Renderer_photoCaptured(const void* rgba, long width, long height)
+{
+    static_cast<IOSRenderer&>(g_renderer()).photoCaptured(rgba, width, height);
+}
+
 long Renderer_linesVertsCount(bool debugBuffer)
 {
     const RenderLines& lines = debugBuffer ? g_renderer().debugLines() : g_renderer().lines();
@@ -155,6 +170,19 @@ void IOSRenderer::endFrame(const FrameContext& frameContext)
 {
     Renderer::endFrame(frameContext);
     mFramePresented = g_swiftRenderer()->endFrame();
+}
+
+void IOSRenderer::photoCaptured(const void* rgba, long width, long height)
+{
+    // Off a Metal completion handler: copied here, answered on the engine thread.
+    BufferPtr pixels;
+    if (rgba && width > 0 && height > 0) {
+        pixels = std::make_shared<Buffer>(static_cast<size_t>(width) * height * 4, rgba);
+    }
+    g_engine().pushEvent([this, pixels, width, height] {
+        mPhotoInFlight = false;
+        deliverPhoto(pixels, pixels ? static_cast<int>(width) : 0, pixels ? static_cast<int>(height) : 0);
+    });
 }
 
 void IOSRenderer::getFrameImageData(int width, int height, Buffer& outBuffer)

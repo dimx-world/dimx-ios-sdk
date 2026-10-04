@@ -2,8 +2,10 @@
 //  ExtMediaStore.swift
 //  DimxCore
 //
-//  Created by Sergii Romanov on 01/07/2024.
-//  Copyright © 2024 Dimensions. All rights reserved.
+//  The share sheet for what the engine captured (MediaCapture, SHARE_MEDIA):
+//  the photo or the video out of the app's cache, with a text beside it - the
+//  dimension and its link - and the photo library, where every capture the
+//  shutter makes is put as it is made (SAVE_TO_GALLERY).
 //
 
 import Foundation
@@ -12,71 +14,93 @@ import Photos
 
 class ExtMediaStore
 {
-    private var mLocalIdentifiers = [String: String]()
+    func shareMedia(_ viewCtrl: UIViewController, _ path: String, _ text: String) {
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: path) else {
+            Logger.error("ExtMediaStore: nothing to share at [\(path)]")
+            return
+        }
+        var items: [Any] = []
+        if isVideoFile(path) {
+            items.append(url)
+        } else if let image = UIImage(contentsOfFile: path) {
+            items.append(image)
+        } else {
+            items.append(url)
+        }
+        if !text.isEmpty {
+            items.append(text)
+        }
+        let activityViewController = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        configurePopover(activityViewController, viewCtrl)
+        viewCtrl.present(activityViewController, animated: true, completion: nil)
+    }
 
-    func moveToExtMediaFile(_ sourcePath: String, _ destPath: String) {
-        PHPhotoLibrary.requestAuthorization { status in
-            guard status == .authorized else {
-                Logger.error("Save to media not authorized")
-                DispatchQueue.main.async {
-                    self.showAlert("Unable to save media file. Please grant access to Photos in the Settings and try again.")
-                }
+    private func isVideoFile(_ filePath: String) -> Bool {
+        return ExtMediaStore.isVideo(filePath)
+    }
+
+    private static func isVideo(_ filePath: String) -> Bool {
+        return filePath.hasSuffix(".mp4") || filePath.hasSuffix(".mov")
+    }
+
+    // A capture into the photo library. The file is linked aside at once - the
+    // engine drops its cache copy when the capture's tile goes, and the first
+    // save waits for the user to answer the library's question. Adding is all
+    // that is asked for (NSPhotoLibraryAddUsageDescription), full access the
+    // fallback for a host app that declares only NSPhotoLibraryUsageDescription,
+    // and nothing at all without either: asking without the purpose string
+    // would end the app.
+    static func saveToPhotos(_ path: String) {
+        let source = URL(fileURLWithPath: path)
+        let fileManager = FileManager.default
+        let stagingDir = fileManager.temporaryDirectory.appendingPathComponent("gallery", isDirectory: true)
+        try? fileManager.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+        let staged = stagingDir.appendingPathComponent(UUID().uuidString + "." + source.pathExtension)
+        do {
+            try fileManager.linkItem(at: source, to: staged)
+        } catch {
+            do {
+                try fileManager.copyItem(at: source, to: staged)
+            } catch {
+                Logger.error("ExtMediaStore: cannot set [\(path)] aside for the photo library: \(error.localizedDescription)")
                 return
             }
+        }
 
+        let info = Bundle.main.infoDictionary ?? [:]
+        let level: PHAccessLevel
+        if info["NSPhotoLibraryAddUsageDescription"] != nil {
+            level = .addOnly
+        } else if info["NSPhotoLibraryUsageDescription"] != nil {
+            level = .readWrite
+        } else {
+            Logger.error("ExtMediaStore: the app declares no photo library purpose string; [\(path)] stays out of Photos")
+            try? fileManager.removeItem(at: staged)
+            return
+        }
+
+        PHPhotoLibrary.requestAuthorization(for: level) { status in
+            guard status == .authorized || status == .limited else {
+                Logger.warn("ExtMediaStore: no access to the photo library (\(status.rawValue)); [\(path)] stays out of Photos")
+                try? FileManager.default.removeItem(at: staged)
+                return
+            }
             PHPhotoLibrary.shared().performChanges({
-                guard let creationRequest = self.makeCreationRequest(sourcePath) else {
-                    Logger.error("ExtMediaStore: invalid creation request for file [\(sourcePath)]")
-                    return
+                if isVideo(staged.path) {
+                    _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: staged)
+                } else {
+                    _ = PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: staged)
                 }
-                let assetPlaceholder = creationRequest.placeholderForCreatedAsset
-                self.mLocalIdentifiers[destPath] = assetPlaceholder?.localIdentifier
             }) { success, error in
                 if success {
-                    Logger.info("ExtMediaStore: file saved [\(destPath)]")
-                    do {
-                        try FileManager.default.removeItem(at: URL(fileURLWithPath: sourcePath))
-                        Logger.info("ExtMediaStore: file removed from documents [\(sourcePath)]")
-                    } catch {
-                        Logger.error("ExtMediaStore: failed to remove file from documents [\(sourcePath)]")
-                    }
-                } else if let error = error {
-                    Logger.error("ExtMediaStore: failed to save file to library [\(sourcePath)]. Error: \(error.localizedDescription)")
+                    Logger.info("ExtMediaStore: saved to Photos [\(path)]")
+                } else {
+                    Logger.error("ExtMediaStore: Photos refused [\(path)]: \(error?.localizedDescription ?? "unknown error")")
                 }
+                try? FileManager.default.removeItem(at: staged)
             }
         }
-    }
-    
-    func shareExtMediaFile(_ viewCtrl: UIViewController, _ file: String) {
-        guard let assetIdentifier = mLocalIdentifiers[file] else {
-            Logger.error("shareExtMediaFile: unknown file [\(file)]")
-            return
-        }
-        
-        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], options: nil)
-        guard let asset = assets.firstObject else {
-            Logger.error("shareExtMediaFile: failed to fetch asset for file [\(file)] localId [\(assetIdentifier)]")
-            return
-        }
-        if isVideoFile(file) {
-            shareVideoAsset(viewCtrl, asset)
-        } else {
-            shareImageAsset(viewCtrl, asset)
-        }
-    }
-    
-    private func isVideoFile(_ filePath: String) -> Bool {
-        return filePath.hasSuffix(".mp4")
-    }
-    
-    private func makeCreationRequest(_ filePath: String) -> PHAssetChangeRequest? {
-        guard let url = URL(string: filePath) else {
-            Logger.error("ExtMediaStore: makeCreationRequest nil url for [\(filePath)]")
-            return nil }
-        if isVideoFile(filePath) {
-            return PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-        }
-        return PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url)
     }
 
     private func configurePopover(_ activityViewController: UIActivityViewController, _ viewCtrl: UIViewController) {
@@ -91,71 +115,5 @@ class ExtMediaStore
                                     width: 0,
                                     height: 0)
         popover.permittedArrowDirections = []
-    }
-    
-    private func shareImageAsset(_ viewCtrl: UIViewController, _ asset: PHAsset) {
-        let imageManager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.isSynchronous = true
-        options.deliveryMode = .highQualityFormat
-        
-        imageManager.requestImageDataAndOrientation(for: asset, options: options) { (data, _, orientation, info) in
-            if let data = data, let image = UIImage(data: data) {
-                // Create the activity view controller
-                let activityViewController = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-                
-                // Present the activity view controller
-                DispatchQueue.main.async {
-                    self.configurePopover(activityViewController, viewCtrl)
-                    viewCtrl.present(activityViewController, animated: true, completion: nil)
-                }
-            }
-        }
-    }
-    
-    private func shareVideoAsset(_ viewCtrl: UIViewController, _ asset: PHAsset) {
-        let options = PHVideoRequestOptions()
-        options.deliveryMode = .highQualityFormat
-
-        PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { (avAsset, audioMix, info) in
-            if let urlAsset = avAsset as? AVURLAsset {
-                let videoURL = urlAsset.url
-                let activityViewController = UIActivityViewController(activityItems: [videoURL], applicationActivities: nil)
-
-                DispatchQueue.main.async {
-                    self.configurePopover(activityViewController, viewCtrl)
-                    viewCtrl.present(activityViewController, animated: true, completion: nil)
-                }
-            }
-        }
-    }
-    
-    func showAlert(_ message: String) {
-        guard let topController = topMostViewController() else {
-            Logger.error("No top controller found")
-            return
-        }
-        
-        let alertController = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        alertController.addAction(UIAlertAction(title: "Go To Settings", style: .default, handler: { /*[alertController]*/ action in
-            switch action.style{
-                case .default:
-                    UIApplication.shared.open(URL(string:UIApplication.openSettingsURLString)!)
-                    break
-                case .cancel: break
-                case .destructive: break
-                @unknown default: break
-            }
-        }))
-        alertController.addAction(UIAlertAction(title: "Continue", style: .default, handler: { /*[alertController]*/ action in
-            switch action.style{
-                case .default: break
-                case .cancel: break
-                case .destructive: break
-                @unknown default: break
-            }
-        }))
-        
-        topController.present(alertController, animated: true, completion: nil)
     }
 }

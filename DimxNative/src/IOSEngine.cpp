@@ -8,6 +8,8 @@
 #include "IOSCloudAnchorSession.h"
 #include "IOSAnalyticsManager.h"
 #include "IOSHttpClient.h"
+#include "IOSVideoEncoder.h"
+#include <multimedia/MediaCapture.h>
 #include <res/HttpClient.h>
 #include <telemetry/TelemetryManager.h>
 
@@ -103,7 +105,7 @@ void initEngine(const char* appInstanceId,
     // dependency of this target in Package.swift.
     g_crossFactory().registerTypeOverride<AnalyticsManager, IOSAnalyticsManager>(CrossType::AnalyticsManager);
     g_crossFactory().registerTypeOverride<Input, IOSInput>(CrossType::Input);
-    g_crossFactory().registerTypeOverride<MultimediaManager, AvMultimediaManager>(CrossType::MultimediaManager);
+    g_crossFactory().registerTypeOverride<MultimediaManager, IOSMultimediaManager>(CrossType::MultimediaManager);
     g_crossFactory().registerTypeOverride<AudioDevice, AlAudioDevice>(CrossType::AudioDevice);
     g_crossFactory().registerTypeOverride<HttpClient, IOSHttpClient>(CrossType::HttpClient);
 
@@ -313,6 +315,16 @@ void* IOSEngine::threadEntry(void* self)
     pthread_setname_np("dimx-engine");
     static_cast<IOSEngine*>(self)->engineThreadFunc();
     return nullptr;
+}
+
+void IOSEngine::requestPermission(const std::string& name, PermissionCallback callback)
+{
+    if (!g_swiftEngine()->requestPermission) {
+        callback(false);
+        return;
+    }
+    const uint64_t id = addPermissionRequest(std::move(callback));
+    g_swiftEngine()->requestPermission(id, name.c_str());
 }
 
 void IOSEngine::start()
@@ -535,6 +547,13 @@ void IOSEngine::updateLiveMode()
              << " AR mode [surface " << mSurfaceAttached.load()
              << " screen " << mScreenVisible.load()
              << " foreground " << mAppInForeground.load() << "]");
+        if (!live) {
+            // A recording ends with the screen - the screen dismissed, the app
+            // backgrounded; its file completes and the share panel shows it
+            // when the screen is back. The share sheet is not a step out of
+            // live mode here, and ends a recording itself (MediaCapture::share).
+            g_mediaCapture().interruptVideo("the AR screen going away");
+        }
     }
     setLiveMode(live);
 }
@@ -658,13 +677,17 @@ void IOSEngine::processCommand(const std::string& command, VariantPtr arguments)
         return;
     }
 
-    if (command == "MOVE_TO_EXT_MEDIA_FILE") {
-        g_swiftEngine()->moveToExtMediaFile(args.get("src", "").c_str(), args.get("dst", "").c_str());
+    if (command == "SHARE_MEDIA") {
+        if (g_swiftEngine()->shareMedia) {
+            g_swiftEngine()->shareMedia(args.get("path", "").c_str(), args.get("text", "").c_str());
+        }
         return;
     }
 
-    if (command == "SHARE_EXT_MEDIA_FILE") {
-        g_swiftEngine()->shareExtMediaFile(args.get("path", "").c_str());
+    if (command == "SAVE_TO_GALLERY") {
+        if (g_swiftEngine()->saveToGallery) {
+            g_swiftEngine()->saveToGallery(args.get("path", "").c_str());
+        }
         return;
     }
 

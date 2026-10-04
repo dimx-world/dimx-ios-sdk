@@ -106,6 +106,13 @@ class Renderer
     
     var frameContext = FrameContext()
 
+    // The frame capture (Renderer: frame capture): a copy of the drawable after
+    // the 3D passes with the capture overlays drawn in, taken only in frames
+    // something wants it - the video recorder, a photo request - and released
+    // when nothing does.
+    private var captureTexture: MTLTexture?
+    private var photoBuffer: MTLBuffer?
+
     // Cached rather than read from the layer: this is read from the engine
     // thread every frame and from the main thread on every touch, and CALayer
     // properties are not for either of those. Seeded from the screen at startup
@@ -317,17 +324,20 @@ class Renderer
         passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
         passDescriptor.colorAttachments[0].loadAction = .clear
 
+        // A capture splits this encoder after the 3D passes (captureFrame) and
+        // the debug pass goes on in another, which loads the depth: kept then.
+        let capturing = Renderer_capturing()
         passDescriptor.depthAttachment.texture = depthStencilTexture
         passDescriptor.depthAttachment.loadAction = .clear
-        passDescriptor.depthAttachment.storeAction = .dontCare
+        passDescriptor.depthAttachment.storeAction = capturing ? .store : .dontCare
         passDescriptor.depthAttachment.clearDepth = 1.0
         
         passDescriptor.stencilAttachment.texture = depthStencilTexture
         passDescriptor.stencilAttachment.loadAction = .clear
-        passDescriptor.stencilAttachment.storeAction = .dontCare
+        passDescriptor.stencilAttachment.storeAction = capturing ? .store : .dontCare
         passDescriptor.stencilAttachment.clearStencil = 0
         
-        let commandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor)!
+        var commandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor)!
         commandEncoder.setFrontFacing(.counterClockwise)
 
         backgroundPass.renderFrame(commandEncoder, frameContext, self)
@@ -338,6 +348,17 @@ class Renderer
         occlusionPass.renderFrame(commandEncoder, frameContext, self)
         defaultPass.renderFrame(commandEncoder, frameContext, self)
         shadowsPass.renderFrame(commandEncoder, frameContext, self)
+
+        // The frame as a photo or a video takes it: the content, before the
+        // debug lines and the HUD go on.
+        if capturing {
+            commandEncoder.endEncoding()
+            commandEncoder = captureFrame(commandBuffer, drawable.texture)
+        } else if captureTexture != nil {
+            captureTexture = nil
+            photoBuffer = nil
+        }
+
         debugPass.renderFrame(commandEncoder, frameContext, self)
         imguiPass.renderFrame(nil, commandEncoder, frameContext, self)
 
@@ -355,6 +376,85 @@ class Renderer
         layerLock.unlock()
 
         return true
+    }
+
+    // The capture point. The render encoder has ended; the drawable is copied
+    // into the capture texture, the capture overlays are drawn into the copy,
+    // the recorder takes it and a photo request is answered from it once the
+    // GPU is done. Returns the encoder the on-screen passes go on with, on the
+    // drawable with its contents kept.
+    private func captureFrame(_ commandBuffer: MTLCommandBuffer, _ drawableTexture: MTLTexture) -> MTLRenderCommandEncoder {
+        let width = drawableTexture.width
+        let height = drawableTexture.height
+        if captureTexture == nil || captureTexture!.width != width || captureTexture!.height != height {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: drawableTexture.pixelFormat, width: width, height: height, mipmapped: false)
+            descriptor.usage = [.shaderRead, .renderTarget]
+            descriptor.storageMode = .private
+            captureTexture = device.makeTexture(descriptor: descriptor)
+            photoBuffer = nil
+            Logger.info("Renderer: capture target \(width)x\(height)")
+        }
+        guard let capture = captureTexture else {
+            // No capture target: the on-screen passes carry on and a photo gets nothing.
+            if Renderer_photoRequested() {
+                Renderer_photoCaptured(nil, 0, 0)
+            }
+            return makeOverlayEncoder(commandBuffer, drawableTexture)
+        }
+
+        let blit = commandBuffer.makeBlitCommandEncoder()!
+        blit.copy(from: drawableTexture, to: capture)
+        blit.endEncoding()
+
+        // The capture overlays, into the capture alone.
+        let overlayEncoder = makeOverlayEncoder(commandBuffer, capture)
+        imguiPass.renderFrame(nil, overlayEncoder, frameContext, self, capture: true)
+        overlayEncoder.endEncoding()
+
+        if VideoRecorder.shared.isRecording {
+            VideoRecorder.shared.encode(capture, commandBuffer: commandBuffer)
+        }
+
+        if Renderer_photoRequested() {
+            let bytesPerRow = width * 4
+            let length = bytesPerRow * height
+            if photoBuffer == nil || photoBuffer!.length != length {
+                photoBuffer = device.makeBuffer(length: length, options: .storageModeShared)
+            }
+            if let buffer = photoBuffer {
+                let copy = commandBuffer.makeBlitCommandEncoder()!
+                copy.copy(from: capture, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                          sourceSize: MTLSize(width: width, height: height, depth: 1),
+                          to: buffer, destinationOffset: 0, destinationBytesPerRow: bytesPerRow, destinationBytesPerImage: length)
+                copy.endEncoding()
+                commandBuffer.addCompletedHandler { _ in
+                    // RGBA, the top row first, as Metal keeps it; copied by the engine at once.
+                    Renderer_photoCaptured(buffer.contents(), width, height)
+                }
+            } else {
+                Renderer_photoCaptured(nil, 0, 0)
+            }
+        }
+
+        return makeOverlayEncoder(commandBuffer, drawableTexture)
+    }
+
+    // A render encoder on `texture` keeping what it holds, with the depth
+    // attachment the UI pipeline states were made against.
+    private func makeOverlayEncoder(_ commandBuffer: MTLCommandBuffer, _ texture: MTLTexture) -> MTLRenderCommandEncoder {
+        let descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].texture = texture
+        descriptor.colorAttachments[0].loadAction = .load
+        descriptor.colorAttachments[0].storeAction = .store
+        descriptor.depthAttachment.texture = depthStencilTexture
+        descriptor.depthAttachment.loadAction = .load
+        descriptor.depthAttachment.storeAction = .dontCare
+        descriptor.stencilAttachment.texture = depthStencilTexture
+        descriptor.stencilAttachment.loadAction = .load
+        descriptor.stencilAttachment.storeAction = .dontCare
+        let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor)!
+        encoder.setFrontFacing(.counterClockwise)
+        return encoder
     }
 
     func getFrameImageData(_ width: Int, _ height: Int, _ outPtr: UnsafeMutableRawPointer) {

@@ -24,7 +24,6 @@ extern "C" {
 #include "src/core/LightingInterface.h"
 #include "src/core/MarkerInterface.h"
 #include "src/core/CameraInterface.h"
-#include "src/core/VisionInterface.h"
 #include "src/core/RaycastInterface.h"
 #include "src/core/SettingsInterface.h"
 #include "src/core/AnalyticsManagerInterface.h"

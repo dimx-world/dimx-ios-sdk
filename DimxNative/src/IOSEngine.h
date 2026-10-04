@@ -23,8 +23,18 @@ struct SwiftEngine
     void (*beaconsStopScanning)();
     void (*updateGeolocation)(const char*);
     void (*updateBeaconStatuses)(const char*);
-    void (*moveToExtMediaFile)(const char* src, const char* dst);
-    void (*shareExtMediaFile)(const char*);
+    // The share sheet with a captured photo or video and a text (MediaCapture, SHARE_MEDIA).
+    void (*shareMedia)(const char* path, const char* text);
+    // A captured photo or video into the photo library (MediaCapture, SAVE_TO_GALLERY).
+    void (*saveToGallery)(const char* path);
+    // A runtime permission by name - "microphone" - answered through
+    // Engine_onPermissionResult under the id (Engine::requestPermission).
+    void (*requestPermission)(uint64_t requestId, const char* name);
+    // The Swift VideoRecorder (IOSVideoEncoder): starts a recording to `path`,
+    // false when it cannot; stops it, answering VideoRecorder_onFinished(stopId)
+    // once the file is complete.
+    bool (*videoRecorderStart)(const char* path, long width, long height, bool audio);
+    void (*videoRecorderStop)(uint64_t stopId);
 
     // Blocks until every command buffer the renderer has committed has
     // completed. The one callback that is deliberately synchronous: the loop
@@ -63,6 +73,9 @@ void initEngine(const char* appInstanceId,
                 long screenWidth,
                 long screenHeight);
 void reloadEngineSession(const char* url, const char* settingsData, const char* accountData);
+// The platform's answers (SwiftEngine.requestPermission, videoRecorderStop).
+void Engine_onPermissionResult(uint64_t requestId, bool granted);
+void VideoRecorder_onFinished(uint64_t stopId);
 void deinitEngine();
 const void* getEngineConfig();
 
@@ -131,6 +144,8 @@ public:
 
     // Seeded from UIScreen before the thread starts, read by IOSDisplay on it.
     void setScreenSize(int width, int height) { mScreenWidth = width; mScreenHeight = height; }
+
+    void requestPermission(const std::string& name, PermissionCallback callback) override;
     int screenWidth() const { return mScreenWidth; }
     int screenHeight() const { return mScreenHeight; }
 

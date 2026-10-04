@@ -15,6 +15,10 @@ long ImGuiContext_numDrawCalls(const void* ptr);
 const ImGuiDrawCall* ImGuiContext_drawCall(const void* ptr, long index);
 const void* ImGuiContext_renderTarget(const void* ptr);
 long ImGuiContext_frameCounter(const void* ptr);
+// Where a 2D context is drawn (ImGuiContextWrapper::onScreen / inCapture): the
+// on-screen UI pass takes the first, the renderer's capture point the second.
+int ImGuiContext_onScreen(const void* ptr);
+int ImGuiContext_inCapture(const void* ptr);
 
 // ImGui 1.92 dynamic font-atlas texture queue (ImDrawData::Textures). The Metal backend services
 // these entries before rendering so every ImTextureData referenced by the draw calls has a valid

@@ -19,7 +19,6 @@ struct SwiftDeviceAR
     long (*createAnchor)(const void*);
     void (*getAnchorTracking)(long, void*);
     void (*deleteAnchor)(long);
-    void (*scanQRCode)(void*, long);
     void (*setQRScanEnabled)(bool);
     void (*raycast)(float, float, float, float, float, float, unsigned long, void*);
 };
@@ -54,7 +53,6 @@ public:
     TrackingResult getAnchorTracking(size_t anchorId) override;
     void deleteAnchor(size_t id) override;
 
-    std::string scanQRCode() override;
     void setQRScanEnabled(bool enabled) override;
 
     RaycastResult raycast(const Ray& ray, uint64_t flags = 0) override;

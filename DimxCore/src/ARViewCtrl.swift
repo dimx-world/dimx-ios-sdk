@@ -219,12 +219,8 @@ class ARViewCtrl: UIViewController, UITextInputTraits {
 */
     }
     
-    func moveToExtMediaFile(_ src: String, _ dst: String) {
-        mExtMediaStore.moveToExtMediaFile(src, dst)
-    }
-    
-    func shareExtMediaFile(_ args: String) {
-        mExtMediaStore.shareExtMediaFile(self, args)
+    func shareMedia(_ path: String, _ text: String) {
+        mExtMediaStore.shareMedia(self, path, text)
     }
 
 }

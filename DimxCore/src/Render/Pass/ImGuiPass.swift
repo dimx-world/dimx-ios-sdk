@@ -98,7 +98,11 @@ class ImGuiPass
         }
     }
 
-    func renderFrame(_ commandBuffer: MTLCommandBuffer?, _ defaultEncoder: MTLRenderCommandEncoder?, _ frameContext: FrameContext, _ renderer: Renderer) {
+    // With an encoder: the 2D contexts into it - the on-screen ones, or with
+    // `capture` the capture overlays (ImGuiContext_inCapture) into the capture
+    // target the encoder draws to. Without one: every 3D context into its own
+    // render target, on the command buffer.
+    func renderFrame(_ commandBuffer: MTLCommandBuffer?, _ defaultEncoder: MTLRenderCommandEncoder?, _ frameContext: FrameContext, _ renderer: Renderer, capture: Bool = false) {
         for i in 0 ..< ImGui_numContexts() {
             let context: UnsafeRawPointer = ImGui_context(i)!
             if ImGuiContext_frameCounter(context) != frameContext.frameCounter {
@@ -109,6 +113,9 @@ class ImGuiPass
             let targetTexturePtr = ImGuiContext_renderTarget(context)
             if defaultEncoder != nil {
                 if targetTexturePtr != nil {
+                    continue
+                }
+                if capture ? (ImGuiContext_inCapture(context) == 0) : (ImGuiContext_onScreen(context) == 0) {
                     continue
                 }
                 encoder = defaultEncoder!

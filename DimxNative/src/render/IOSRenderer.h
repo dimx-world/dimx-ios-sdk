@@ -22,6 +22,13 @@ struct SwiftRenderer
 };
 struct SwiftRenderer* g_swiftRenderer();
 
+// The frame capture (Renderer: frame capture), for Renderer.endFrame: whether
+// this frame's capture is wanted at all, whether a photo of it is, and the
+// photo's pixels - RGBA, the top row first - once the GPU has written them.
+bool Renderer_capturing();
+bool Renderer_photoRequested();
+void Renderer_photoCaptured(const void* rgba, long width, long height);
+
 long Renderer_linesVertsCount(bool debugBuffer);
 const void* Renderer_linesVertsData(bool debugBuffer);
 long Renderer_linesPolyVertsCount(bool debugBuffer);
@@ -72,8 +79,15 @@ public:
     bool framePresented() const { return mFramePresented; }
     void clearFramePresented() { mFramePresented = false; }
 
+    // The capture, for the Swift side (the C functions above). A photo asked
+    // for is taken once: the request stands until the GPU has delivered it,
+    // and the frames in between take no second copy.
+    bool wantsPhoto() { if (!photoRequested() || mPhotoInFlight) { return false; } mPhotoInFlight = true; return true; }
+    void photoCaptured(const void* rgba, long width, long height);
+
 private:
     bool mFramePresented = false;
+    bool mPhotoInFlight = false;
 };
 #endif // __cplusplus
 

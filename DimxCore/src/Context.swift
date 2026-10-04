@@ -163,14 +163,37 @@ public class Context: NSObject
             let value = String(cString: rawValue)
             DispatchQueue.main.async { Context.inst().webViewCtrl()?.updateBeaconStatuses(value) }
         }
-        g_swiftEngine().pointee.moveToExtMediaFile = { (src: UnsafePointer<CChar>!, dst: UnsafePointer<CChar>!) -> Void in
-            let src = String(cString: src)
-            let dst = String(cString: dst)
-            DispatchQueue.main.async { Context.inst().arViewCtrl()?.moveToExtMediaFile(src, dst) }
+        g_swiftEngine().pointee.shareMedia = { (path: UnsafePointer<CChar>!, text: UnsafePointer<CChar>!) -> Void in
+            let path = String(cString: path)
+            let text = String(cString: text)
+            DispatchQueue.main.async { Context.inst().arViewCtrl()?.shareMedia(path, text) }
         }
-        g_swiftEngine().pointee.shareExtMediaFile = { (args: UnsafePointer<CChar>!) -> Void in
-            let args = String(cString: args)
-            DispatchQueue.main.async { Context.inst().arViewCtrl()?.shareExtMediaFile(args) }
+        // On the engine thread: the file is set aside before this returns (ExtMediaStore).
+        g_swiftEngine().pointee.saveToGallery = { (path: UnsafePointer<CChar>!) -> Void in
+            ExtMediaStore.saveToPhotos(String(cString: path))
+        }
+        // A runtime permission the engine asks for by name, answered under the request's id.
+        g_swiftEngine().pointee.requestPermission = { (requestId: UInt64, name: UnsafePointer<CChar>!) -> Void in
+            let name = String(cString: name)
+            DispatchQueue.main.async {
+                switch name {
+                case "microphone":
+                    PermissionsManager.requestMicrophone { granted in
+                        Engine_onPermissionResult(requestId, granted)
+                    }
+                default:
+                    Logger.error("requestPermission: unknown permission [\(name)]")
+                    Engine_onPermissionResult(requestId, false)
+                }
+            }
+        }
+        // The video recorder (VideoRecorder.swift), for the engine's IOSVideoEncoder, with
+        // the microphone of its own. Engine thread, where the frames come from.
+        g_swiftEngine().pointee.videoRecorderStart = { (path: UnsafePointer<CChar>!, width: Int, height: Int, audio: Bool) -> Bool in
+            return VideoRecorder.shared.start(path: String(cString: path), width: width, height: height, audio: audio)
+        }
+        g_swiftEngine().pointee.videoRecorderStop = { (stopId: UInt64) -> Void in
+            VideoRecorder.shared.stop(id: stopId)
         }
         // Deliberately synchronous, and deliberately touches nothing but Metal:
         // the engine thread calls this to drain the GPU before it parks.

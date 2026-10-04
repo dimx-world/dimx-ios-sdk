@@ -13,7 +13,6 @@ public class AppConfig
 {
     private var mDimensions: [String] = []
     private var mShowAppScreenAction: ((String) -> Void)?
-    private var mQRCodeEnabled: Bool = false
     private var mSharePhotoEnabled: Bool = false
     private var mShareVideoEnabled: Bool = false
     private var mWebVersions: [String] = []
@@ -39,8 +38,11 @@ public class AppConfig
         return mShowAppScreenAction
     }
 
+    // Does nothing since 2026-10-04: the AR screen's QR scan button is gone, the
+    // camera reads a code by itself. Kept so an app built against an older SDK
+    // keeps compiling.
+    @available(*, deprecated, message: "The QR scan button is gone; codes are read from the camera by themselves. This does nothing.")
     public func setQRCodeEnabled(_ value: Bool) {
-        mQRCodeEnabled = value
     }
 
     public func setSharePhotoEnabled(_ value: Bool) {
@@ -123,7 +125,6 @@ public class AppConfig
     func toJsonString() -> String {
         var jsonObject: [String: Any] = [
             "back_enabled": mShowAppScreenAction != nil,
-            "qrcode_enabled": mQRCodeEnabled,
             "share_photo_enabled": mSharePhotoEnabled,
             "share_video_enabled": mShareVideoEnabled
         ]

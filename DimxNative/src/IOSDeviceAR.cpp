@@ -73,14 +73,6 @@ void IOSDeviceAR::deleteAnchor(size_t id)
     g_swiftDeviceAR()->deleteAnchor(static_cast<long>(id));
 }
 
-std::string IOSDeviceAR::scanQRCode()
-{
-    constexpr long MAX_QRCODE_STR_SIZE = 1024;
-    char buffer[MAX_QRCODE_STR_SIZE] = {};
-    g_swiftDeviceAR()->scanQRCode(buffer, MAX_QRCODE_STR_SIZE - 1);
-    return std::string{buffer};
-}
-
 void IOSDeviceAR::setQRScanEnabled(bool enabled)
 {
     DeviceAR::setQRScanEnabled(enabled);

@@ -119,3 +119,13 @@ void ImTexture_setDestroyed(void* tex)
     t->SetTexID(ImTextureID_Invalid);
     t->SetStatus(ImTextureStatus_Destroyed);
 }
+
+int ImGuiContext_onScreen(const void* ptr)
+{
+    return reinterpret_cast<const ImGuiContextWrapper*>(ptr)->onScreen() ? 1 : 0;
+}
+
+int ImGuiContext_inCapture(const void* ptr)
+{
+    return reinterpret_cast<const ImGuiContextWrapper*>(ptr)->inCapture() ? 1 : 0;
+}

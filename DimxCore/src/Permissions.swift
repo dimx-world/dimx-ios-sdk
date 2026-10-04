@@ -41,6 +41,41 @@ public struct PermissionOutcome {
 ///
 /// Main thread only, like every UIKit prompt.
 public final class PermissionsManager {
+    /// The microphone, for a video recording with sound (the engine's
+    /// requestPermission): the system prompt when undecided, the standing
+    /// answer otherwise. Main thread; answers on the main queue.
+    static func requestMicrophone(_ completion: @escaping (Bool) -> Void) {
+        if #available(iOS 17.0, *) {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted:
+                completion(true)
+                return
+            case .denied:
+                completion(false)
+                return
+            default:
+                break
+            }
+            AVAudioApplication.requestRecordPermission { granted in
+                DispatchQueue.main.async { completion(granted) }
+            }
+        } else {
+            switch AVAudioSession.sharedInstance().recordPermission {
+            case .granted:
+                completion(true)
+                return
+            case .denied:
+                completion(false)
+                return
+            default:
+                break
+            }
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                DispatchQueue.main.async { completion(granted) }
+            }
+        }
+    }
+
     private struct Request {
         let camera: Bool
         let completion: (PermissionOutcome) -> Void
