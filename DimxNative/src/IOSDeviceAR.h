@@ -26,6 +26,9 @@ struct SwiftDeviceAR* g_swiftDeviceAR();
 
 // Swift-side query for the engine's passive-QR-scan gate (DeviceAR::qrScanEnabled()).
 bool DeviceAR_qrScanEnabled();
+// Whether the engine wants the camera's depth this frame - the user's Depth
+// Occlusion setting on a device that supports it (DeviceAR::depthWanted).
+bool DeviceAR_depthWanted();
 // The camera feed behind the AR screen, for the engine's Live View cover
 // (DeviceAR::setCameraFeedWanted, setCameraFrameReady): asked for when the
 // screen starts the session, its first frame as ARKit delivers it.

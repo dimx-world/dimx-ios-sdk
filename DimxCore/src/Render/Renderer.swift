@@ -1,6 +1,8 @@
 import UIKit
 import Metal
 import MetalKit
+import ARKit
+import CoreVideo
 import DimxNative
 
 func validateVertexAttributeEnum()
@@ -113,6 +115,26 @@ class Renderer
     private var captureTexture: MTLTexture?
     private var photoBuffer: MTLBuffer?
 
+    // Occlusion by the real world (the user's Depth Occlusion setting; DeviceAR
+    // puts the depth into the frames): this frame's depth - metres along the
+    // camera's axis, laid out as the camera image - and its matte, with the
+    // transform from the screen to that layout. A texel of no depth and a full
+    // matte stand in when there is none: the standard shader binds both whether
+    // or not it reads them. Engine thread, like the rest of the frame.
+    struct DepthOcclusion {
+        var active = false
+        var map: MTLTexture
+        var matte: MTLTexture
+        var uvTransform = matrix_identity_float3x3
+        var aspectRatio: Float = 1
+    }
+    private(set) var depthOcclusion: DepthOcclusion!
+    private var noDepthTexture: MTLTexture!
+    private var fullMatteTexture: MTLTexture!
+    private var depthTextureCache: CVMetalTextureCache?
+    private var matteGenerator: ARMatteGenerator?
+    private var depthSourceLogged = ""
+
     // Cached rather than read from the layer: this is read from the engine
     // thread every frame and from the main thread on every touch, and CALayer
     // properties are not for either of those. Seeded from the screen at startup
@@ -215,6 +237,13 @@ class Renderer
 
         updateDepthStencilTexture(viewportSize)
 
+        noDepthTexture = makeTexel(.r32Float, Float(0))
+        fullMatteTexture = makeTexel(.r8Unorm, UInt8(255))
+        depthOcclusion = DepthOcclusion(map: noDepthTexture, matte: fullMatteTexture)
+        var cache: CVMetalTextureCache?
+        CVMetalTextureCacheCreate(nil, nil, device, nil, &cache)
+        depthTextureCache = cache
+
         backgroundPass = BackgroundPass(self)
         occlusionPass = OcclusionPass(self)
         defaultPass = DefaultPass(self)
@@ -313,6 +342,9 @@ class Renderer
                 DispatchQueue.main.async(execute: firstPresent)
             }
         }
+
+        // Before any pass: the people matte is generated into this command buffer.
+        updateDepthOcclusion(commandBuffer)
 
         imguiPass.renderFrame(commandBuffer, nil, frameContext, self)
 
@@ -437,6 +469,94 @@ class Renderer
         }
 
         return makeOverlayEncoder(commandBuffer, drawableTexture)
+    }
+
+    // MARK: - Depth occlusion
+
+    // What this frame's draws are occluded by: LiDAR's scene depth when the
+    // frames carry it, else the people matte and its depth, else nothing.
+    private func updateDepthOcclusion(_ commandBuffer: MTLCommandBuffer) {
+        depthOcclusion.active = false
+        depthOcclusion.map = noDepthTexture
+        depthOcclusion.matte = fullMatteTexture
+
+        // Off at once when the setting goes off, before ARKit's frames stop carrying depth.
+        guard DeviceAR_depthWanted(), let frame = DeviceAR.instance.currentFrame() else {
+            logDepthSource("none")
+            return
+        }
+
+        let source: String
+        if let depthMap = (frame.smoothedSceneDepth ?? frame.sceneDepth)?.depthMap,
+           let texture = makeTexture(depthMap, .r32Float, commandBuffer) {
+            depthOcclusion.map = texture
+            source = "scene depth \(texture.width)x\(texture.height)"
+        } else if frame.segmentationBuffer != nil && frame.estimatedDepthData != nil {
+            if matteGenerator == nil {
+                matteGenerator = ARMatteGenerator(device: device, matteResolution: .half)
+            }
+            depthOcclusion.matte = matteGenerator!.generateMatte(from: frame, commandBuffer: commandBuffer)
+            depthOcclusion.map = matteGenerator!.generateDilatedDepth(from: frame, commandBuffer: commandBuffer)
+            source = "people \(depthOcclusion.map.width)x\(depthOcclusion.map.height)"
+        } else {
+            // Wanted, and the session has not taken the depth semantics yet.
+            logDepthSource("none yet")
+            return
+        }
+
+        depthOcclusion.active = true
+        depthOcclusion.aspectRatio = Float(depthOcclusion.map.width) / Float(max(depthOcclusion.map.height, 1))
+        depthOcclusion.uvTransform = depthUVTransform(frame)
+        logDepthSource(source)
+    }
+
+    // Screen NDC -> the view's normalized coordinates, origin top left as the
+    // background pass's quad has them -> the camera image's, which ARKit lays its
+    // depth and matte out in: the inverse of the frame's display transform, as
+    // the background pass maps the camera image.
+    private func depthUVTransform(_ frame: ARFrame) -> matrix_float3x3 {
+        let t = frame.displayTransform(for: Context.inst().getInterfaceOrientation(), viewportSize: viewportSize).inverted()
+        let viewToImage = matrix_float3x3(columns: (SIMD3<Float>(Float(t.a), Float(t.b), 0),
+                                                   SIMD3<Float>(Float(t.c), Float(t.d), 0),
+                                                   SIMD3<Float>(Float(t.tx), Float(t.ty), 1)))
+        let ndcToView = matrix_float3x3(columns: (SIMD3<Float>(0.5, 0, 0),
+                                                 SIMD3<Float>(0, -0.5, 0),
+                                                 SIMD3<Float>(0.5, 0.5, 1)))
+        return viewToImage * ndcToView
+    }
+
+    // A texture over the pixel buffer's own memory. The CVMetalTexture is what
+    // holds that memory, so it is kept until the GPU is done with this frame.
+    private func makeTexture(_ pixelBuffer: CVPixelBuffer, _ format: MTLPixelFormat, _ commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+        guard let cache = depthTextureCache else { return nil }
+        var cvTexture: CVMetalTexture?
+        let status = CVMetalTextureCacheCreateTextureFromImage(nil, cache, pixelBuffer, nil, format,
+                                                               CVPixelBufferGetWidth(pixelBuffer),
+                                                               CVPixelBufferGetHeight(pixelBuffer),
+                                                               0, &cvTexture)
+        guard status == kCVReturnSuccess, let cvTexture = cvTexture,
+              let texture = CVMetalTextureGetTexture(cvTexture) else {
+            return nil
+        }
+        commandBuffer.addCompletedHandler { _ in withExtendedLifetime(cvTexture) {} }
+        return texture
+    }
+
+    private func makeTexel<T>(_ format: MTLPixelFormat, _ value: T) -> MTLTexture {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format, width: 1, height: 1, mipmapped: false)
+        descriptor.usage = [.shaderRead]
+        let texture = device.makeTexture(descriptor: descriptor)!
+        var texel = value
+        texture.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &texel,
+                        bytesPerRow: MemoryLayout<T>.size)
+        return texture
+    }
+
+    private func logDepthSource(_ source: String) {
+        if source != depthSourceLogged {
+            depthSourceLogged = source
+            Logger.info("Renderer: depth occlusion - \(source)")
+        }
     }
 
     // A render encoder on `texture` keeping what it holds, with the depth

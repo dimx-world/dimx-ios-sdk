@@ -49,6 +49,7 @@ class Material
     var blendMode: Int32 { coreMaterial != nil ? Int32(Material_effectiveBlend(coreMaterial)) : 0 }
     var alphaCutoff: Float { coreMaterial != nil ? Material_alphaCutoff(coreMaterial) : 0.5 }
     var depthWrite: Bool { coreMaterial == nil || Material_depthWrite(coreMaterial) }
+    var depthOcclusion: Bool { coreMaterial == nil || Material_depthOcclusion(coreMaterial) }
     var sortPriority: Int { coreMaterial != nil ? Int(Material_sortPriority(coreMaterial)) : 0 }
     var cullMode: MTLCullMode {
         switch coreMaterial != nil ? Material_cullMode(coreMaterial) : 0 {
@@ -315,7 +316,14 @@ class Material
         fragUniforms.fShadowDarkness = scene.lighting.shadowDarkness
         fragUniforms.fShadowDecayDistScaled = scene.lighting.shadowDecayDistScaled
         
-        fragUniforms.fUseDepthOcclusion = false
+        // Occlusion by the real world, in the frames that have the camera's depth:
+        // for what the camera sees by - not the occluders' depth-only pass nor the
+        // shadow map - and a material that has not opted out. A shadow lies on the
+        // real ground, so it is occluded whatever its receiver's material says.
+        let depth = renderer.depthOcclusion!
+        fragUniforms.fUseDepthOcclusion = depth.active && !occlusionPass && !shadowMapPass && (shadowsPass || depthOcclusion)
+        fragUniforms.fDepthMapUVTransform = depth.uvTransform
+        fragUniforms.fDepthMapAspectRatio = depth.aspectRatio
         if occlusionPass {
             encoder.setRenderPipelineState(occlusionPipelineState)
         } else if shadowMapPass {
@@ -354,8 +362,10 @@ class Material
             encoder.setFragmentTexture(scene.shadowMap, index: FragmentTextureIndex.FTIShadowMap.rawValue)
         }
 
-        //encoder.setFragmentTexture(depthMapTex.texture, index: FragmentTextureIndex.FTIDepthMap.rawValue)
-        
+        // Bound whether or not this draw reads them: the shader declares both.
+        encoder.setFragmentTexture(depth.map, index: FragmentTextureIndex.FTIDepthMap.rawValue)
+        encoder.setFragmentTexture(depth.matte, index: FragmentTextureIndex.FTIDepthMatte.rawValue)
+
         if scene.skyboxIrradianceMap != nil {
             encoder.setFragmentTexture(scene.skyboxIrradianceMap!.mTexture, index: FragmentTextureIndex.FTIIrradianceMap.rawValue)
         }

@@ -30,6 +30,11 @@ bool Material_depthWrite(const void* ptr)
     return reinterpret_cast<const Material*>(ptr)->depthWrite();
 }
 
+bool Material_depthOcclusion(const void* ptr)
+{
+    return reinterpret_cast<const Material*>(ptr)->depthOcclusion();
+}
+
 long Material_cullMode(const void* ptr)
 {
     switch (reinterpret_cast<const Material*>(ptr)->cullMode()) {

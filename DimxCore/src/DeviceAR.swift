@@ -56,6 +56,27 @@ class DeviceAR: NSObject, ARSessionDelegate
     private var mCameraMinZ: Float = 0.0
     private var mCameraMaxZ: Float = 0.0
 
+    // Occlusion by the real world, while the user's Depth Occlusion setting is on
+    // (DeviceAR_depthWanted): ARKit's smoothed scene depth on a device with
+    // LiDAR - the room occludes, as ARCore's depth does on Android - and people
+    // segmentation with depth on the other A12-and-later devices - people do.
+    // The renderer takes whichever the frames carry (Renderer.updateDepthOcclusion).
+    private static let depthSemantics: ARConfiguration.FrameSemantics? = {
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.smoothedSceneDepth) {
+            return .smoothedSceneDepth
+        }
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentationWithDepth) {
+            return .personSegmentationWithDepth
+        }
+        return nil
+    }()
+    // Engine thread: what was last asked of the session.
+    private var mDepthRequested = false
+    // Main thread: whether an AR screen is running the session, and whether ARKit
+    // refused the depth semantics in this configuration.
+    private var mSessionRunning = false
+    private var mDepthRefused = false
+
     static func initCallbacks() {
         g_swiftDeviceAR().pointee.initialize = {
             (configPtr: Optional<UnsafeRawPointer>) -> () in
@@ -151,6 +172,7 @@ class DeviceAR: NSObject, ARSessionDelegate
     // appearance and by Context.reloadARSession.
     func pauseSession() {
         session.pause()
+        mSessionRunning = false
         DeviceAR_setCameraFeedWanted(false)
 
         mSessionLock.lock()
@@ -168,6 +190,7 @@ class DeviceAR: NSObject, ARSessionDelegate
         qrScanner.resetDedupe()
         configuration.detectionImages.removeAll()
         session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+        mSessionRunning = true
 
         // The Live View cover is up from here until this session's first frame.
         mSessionLock.lock()
@@ -181,6 +204,18 @@ class DeviceAR: NSObject, ARSessionDelegate
     // queue, as every delegate call.
     func session(_ session: ARSession, didFailWithError error: Error) {
         Logger.error("DeviceAR: the AR session failed: \(error)")
+
+        // A configuration ARKit refuses with the depth semantics in it - a video
+        // format they do not go with, say - runs again without them rather than
+        // leaving the screen without a camera.
+        if let semantics = DeviceAR.depthSemantics, configuration.frameSemantics.contains(semantics) {
+            configuration.frameSemantics.remove(semantics)
+            mDepthRefused = true
+            Logger.warn("DeviceAR: depth occlusion off - ARKit refused the configuration with it")
+            if mSessionRunning {
+                session.run(configuration)
+            }
+        }
     }
 
     func sessionWasInterrupted(_ session: ARSession) {
@@ -192,6 +227,8 @@ class DeviceAR: NSObject, ARSessionDelegate
     }
 
     func preFrameUpdate(frameContextPtr: UnsafeRawPointer) {
+        applyDepthSemantics()
+
         guard let frame = currentFrame() else { return }
 
         let orientation = Context.inst().getInterfaceOrientation()
@@ -199,6 +236,40 @@ class DeviceAR: NSObject, ARSessionDelegate
         Camera_setProjectionMat(&projMat)
         var viewMat = frame.camera.viewMatrix(for: orientation)
         Camera_setViewMat(&viewMat)
+    }
+
+    // Engine thread. Puts the depth semantics into the configuration when the
+    // engine starts wanting them and takes them out when it stops; the session
+    // mutation is the main thread's, like every other.
+    private func applyDepthSemantics() {
+        let wanted = DeviceAR_depthWanted()
+        if wanted == mDepthRequested {
+            return
+        }
+        mDepthRequested = wanted
+        guard let semantics = DeviceAR.depthSemantics else {
+            if wanted {
+                Logger.info("DeviceAR: depth occlusion wanted, but this device has neither LiDAR nor people segmentation")
+            }
+            return
+        }
+
+        runSessionOnMain { [self] session, configuration in
+            if wanted && mDepthRefused {
+                return
+            }
+            if wanted {
+                configuration.frameSemantics.insert(semantics)
+            } else {
+                configuration.frameSemantics.remove(semantics)
+            }
+            Logger.info("DeviceAR: depth \(wanted ? "on" : "off") - \(semantics == .smoothedSceneDepth ? "scene depth (LiDAR)" : "people segmentation")")
+            // A running session takes the change now and keeps its tracking; a
+            // paused one starts with it at the next screen's run.
+            if mSessionRunning {
+                session.run(configuration)
+            }
+        }
     }
 
     func inFrameUpdate(frameContextPtr: UnsafeRawPointer) {

@@ -13,6 +13,11 @@ bool DeviceAR_qrScanEnabled()
     return g_deviceAR().qrScanEnabled();
 }
 
+bool DeviceAR_depthWanted()
+{
+    return g_deviceAR().depthWanted();
+}
+
 void DeviceAR_setCameraFeedWanted(bool wanted)
 {
     g_deviceAR().setCameraFeedWanted(wanted);

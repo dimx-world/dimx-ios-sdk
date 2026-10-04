@@ -67,6 +67,10 @@ struct StandardFragmentUniforms {
     float fShadowDarkness;
     float fShadowDecayDistScaled;
 
+    // Occlusion by the real world (Renderer.updateDepthOcclusion): whether this
+    // draw is occluded, the transform from screen NDC to the camera image's
+    // coordinates - what the depth map (metres) and its matte are laid out in -
+    // and the depth map's width over its height.
     bool fUseDepthOcclusion;
     matrix_float3x3 fDepthMapUVTransform;
     float fDepthMapAspectRatio;
@@ -119,6 +123,7 @@ typedef NS_ENUM(NSInteger, FragmentTextureIndex)
     FTINormalMap,
     FTIMetalnessMap,
     FTIRoughnessMap,
+    FTIDepthMatte,
 };
 
 typedef NS_ENUM(NSInteger, FunctionConstant)

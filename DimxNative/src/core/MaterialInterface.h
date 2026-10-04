@@ -12,11 +12,13 @@ bool Material_transparent(const void* ptr);
 // Render state, resolved through the material's parent chain as the GL
 // renderer reads it: the blend that is in effect (0 opaque, 1 cutout,
 // 2 alpha, 3 additive, 4 multiply - the values the shader switches on),
-// the cutout threshold, whether the draw writes depth, the cull mode
-// (0 back, 1 front, 2 off) and the sort priority among blended meshes.
+// the cutout threshold, whether the draw writes depth, whether the real world
+// may hide it (occlusion by the camera's depth), the cull mode (0 back,
+// 1 front, 2 off) and the sort priority among blended meshes.
 long Material_effectiveBlend(const void* ptr);
 float Material_alphaCutoff(const void* ptr);
 bool Material_depthWrite(const void* ptr);
+bool Material_depthOcclusion(const void* ptr);
 long Material_cullMode(const void* ptr);
 long Material_sortPriority(const void* ptr);
 
