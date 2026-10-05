@@ -8,8 +8,8 @@ class Material
     // The same shader with the framebuffer as a blend factor, for Multiply.
     var multiplyPipelineState: MTLRenderPipelineState!
     var occlusionPipelineState: MTLRenderPipelineState!
-    var shadowMapPipelineState: MTLRenderPipelineState!
-    var shadowsPipelineState: MTLRenderPipelineState!
+    // The vertex stage alone, into a ground shadow's depth target (GroundShadowPass).
+    var groundCasterPipelineState: MTLRenderPipelineState!
 
     var vertUniforms: StandardVertexUniforms = StandardVertexUniforms()
     var numSkelJoints = 0
@@ -49,6 +49,8 @@ class Material
     var blendMode: Int32 { coreMaterial != nil ? Int32(Material_effectiveBlend(coreMaterial)) : 0 }
     var alphaCutoff: Float { coreMaterial != nil ? Material_alphaCutoff(coreMaterial) : 0.5 }
     var depthWrite: Bool { coreMaterial == nil || Material_depthWrite(coreMaterial) }
+    // Whether a mesh drawn with it casts a ground shadow (Renderable::castsGroundShadow).
+    var castsGroundShadow: Bool { coreMaterial == nil || Material_castsGroundShadow(coreMaterial) }
     var depthOcclusion: Bool { coreMaterial == nil || Material_depthOcclusion(coreMaterial) }
     var sortPriority: Int { coreMaterial != nil ? Int(Material_sortPriority(coreMaterial)) : 0 }
     var cullMode: MTLCullMode {
@@ -216,25 +218,15 @@ class Material
         populateVertAttribsConstants(funcConsts, mesh)
 
         var occlusonFlag = false
-        var shadowsFlag = false
         funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
-        funcConsts.setConstantValue(&shadowsFlag, type: MTLDataType.bool, index: FunctionConstant.FCShadowsPass.rawValue)
         defaultPipelineState = pipelineState(.defaultPass, mesh) { self.createPipelineStateDescr(funcConsts, mesh) }
         multiplyPipelineState = pipelineState(.defaultPass, mesh, multiply: true) { self.createPipelineStateDescr(funcConsts, mesh, multiply: true) }
+        groundCasterPipelineState = pipelineState(.groundCaster, mesh) { self.createGroundCasterPipelineStateDescr(funcConsts, mesh) }
 
         occlusonFlag = true
         funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
         occlusionPipelineState = pipelineState(.occlusion, mesh) { self.createPipelineStateDescr(funcConsts, mesh) }
 
-        occlusonFlag = false
-        shadowsFlag = true
-        funcConsts.setConstantValue(&occlusonFlag, type: MTLDataType.bool, index: FunctionConstant.FCOcclusionPass.rawValue)
-        funcConsts.setConstantValue(&shadowsFlag, type: MTLDataType.bool, index: FunctionConstant.FCShadowsPass.rawValue)
-        shadowsPipelineState = pipelineState(.shadows, mesh) { self.createPipelineStateDescr(funcConsts, mesh) }
-
-        // Built with the shadows constants still set, as it always has been.
-        shadowMapPipelineState = pipelineState(.shadowMap, mesh) { self.createShadowMapPipelineStateDescr(funcConsts, mesh) }
-        
         self.numSkelJoints = numSkelJoints
         if self.numSkelJoints > 0 {
             jointTransformsBuffer = Renderer.instance.device.makeBuffer(length: MemoryLayout<simd_float4x4>.stride * self.numSkelJoints, options: [])
@@ -248,21 +240,22 @@ class Material
         stencilRefValue = UInt32(Material_stencilRefValue(coreMat))
     }
     
+    // `casterViewProj`: drawn into a ground shadow's depth target, with this
+    // view-projection in place of the camera's (GroundShadowPass).
     func setupRender(_ renderer: Renderer,
                      _ encoder: MTLRenderCommandEncoder,
                      _ mesh: RenderableMesh,
                      _ frameContext: FrameContext,
-                     occlusionPass: Bool,
-                     shadowMapPass: Bool,
-                     shadowsPass: Bool)
+                     occlusionPass: Bool = false,
+                     casterViewProj: matrix_float4x4? = nil)
     {
         let renderable = mesh.getParentRenderable()
         let scene = renderable.getScene()
-        
+        let casterPass = casterViewProj != nil
+
         vertUniforms.vViewMat = frameContext.viewMat
-        vertUniforms.vViewProjMat = frameContext.viewProjectionMat
-        vertUniforms.vLightSpaceMat = scene.lighting.lightSpaceMat
-       
+        vertUniforms.vViewProjMat = casterViewProj ?? frameContext.viewProjectionMat
+
         vertUniforms.vModelMat = renderable.nodeTransform()
         vertUniforms.vNormalMat = renderable.nodeNormalTransform()
         vertUniforms.vUvTransform = uvTransform
@@ -304,33 +297,23 @@ class Material
         fragUniforms.fMultColor = multColor * vector_float4(mf, mf, mf, 1)
 
         fragUniforms.fCameraPos = frameContext.cameraPos
-        
-        fragUniforms.fReceiveShadows = renderable.receiveShadows
+
         fragUniforms.fLightDir = scene.lighting.direction
         fragUniforms.fLightAmbientColor = scene.lighting.ambientColor
         fragUniforms.fLightDiffuseColor = scene.lighting.diffuseColor
         fragUniforms.fLightSpecularColor = scene.lighting.specularColor
-        
-        fragUniforms.fShadowMapSize = vector_float2(Float(scene.lighting.shadowMapSize), Float(scene.lighting.shadowMapSize))
-        fragUniforms.fShadowSoftness = scene.lighting.shadowSoftness
-        fragUniforms.fShadowDarkness = scene.lighting.shadowDarkness
-        fragUniforms.fShadowDecayDistScaled = scene.lighting.shadowDecayDistScaled
-        
+
         // Occlusion by the real world, in the frames that have the camera's depth:
-        // for what the camera sees by - not the occluders' depth-only pass nor the
-        // shadow map - and a material that has not opted out. A shadow lies on the
-        // real ground, so it is occluded whatever its receiver's material says.
+        // for what the camera sees by - not the occluders' depth-only pass nor a
+        // ground shadow's casters - and a material that has not opted out.
         let depth = renderer.depthOcclusion!
-        fragUniforms.fUseDepthOcclusion = depth.active && !occlusionPass && !shadowMapPass && (shadowsPass || depthOcclusion)
+        fragUniforms.fUseDepthOcclusion = depth.active && !occlusionPass && !casterPass && depthOcclusion
         fragUniforms.fDepthMapUVTransform = depth.uvTransform
         fragUniforms.fDepthMapAspectRatio = depth.aspectRatio
         if occlusionPass {
             encoder.setRenderPipelineState(occlusionPipelineState)
-        } else if shadowMapPass {
-            vertUniforms.vViewProjMat = scene.lighting.lightSpaceMat
-            encoder.setRenderPipelineState(shadowMapPipelineState)
-        } else if shadowsPass {
-            encoder.setRenderPipelineState(shadowsPipelineState)
+        } else if casterPass {
+            encoder.setRenderPipelineState(groundCasterPipelineState)
         } else {
             encoder.setRenderPipelineState(blend == BLEND_MODE_MULTIPLY ? multiplyPipelineState : defaultPipelineState)
         }
@@ -355,11 +338,6 @@ class Material
         }
         if roughnessMap != nil {
             encoder.setFragmentTexture(roughnessMap!.mTexture, index: FragmentTextureIndex.FTIRoughnessMap.rawValue)
-        }
-
-        //encoder.setFragmentSamplerState(texture.mSamplerState, index: FragmentTextureIndex.FTITexture.rawValue)
-        if !occlusionPass && !shadowMapPass {
-            encoder.setFragmentTexture(scene.shadowMap, index: FragmentTextureIndex.FTIShadowMap.rawValue)
         }
 
         // Bound whether or not this draw reads them: the shader declares both.
@@ -391,7 +369,7 @@ class Material
     // are fixed for the lifetime of the device this cache belongs to.
     struct PipelineKey: Hashable {
         enum Pass {
-            case defaultPass, occlusion, shadows, shadowMap
+            case defaultPass, occlusion, groundCaster
         }
 
         let pass: Pass
@@ -463,16 +441,16 @@ class Material
         return pipelineStateDescriptor
     }
 
-    func createShadowMapPipelineStateDescr(_ funcConsts: MTLFunctionConstantValues, _ mesh: Mesh) -> MTLRenderPipelineDescriptor {
+    // Depth alone, in the ground shadow target's format: no fragment stage, so a
+    // cutout mesh casts its whole quads.
+    func createGroundCasterPipelineStateDescr(_ funcConsts: MTLFunctionConstantValues, _ mesh: Mesh) -> MTLRenderPipelineDescriptor {
         let defaultLibrary = Renderer.instance.getLibrary()
         let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
         pipelineStateDescriptor.vertexFunction = try! defaultLibrary.makeFunction(name: "standard_vertex", constantValues: funcConsts)
         pipelineStateDescriptor.fragmentFunction = nil
         pipelineStateDescriptor.vertexDescriptor = mesh.vertexDescriptor
-        //pipelineStateDescriptor.sampleCount = Renderer.instance.sampleCount // deprecated in ios 16.0
         pipelineStateDescriptor.colorAttachments[0].pixelFormat = .invalid
-        pipelineStateDescriptor.depthAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
-        //pipelineStateDescriptor.stencilAttachmentPixelFormat = Renderer.instance.depthStencilPixelFormat
+        pipelineStateDescriptor.depthAttachmentPixelFormat = GroundShadowPass.depthPixelFormat
         return pipelineStateDescriptor
     }
     

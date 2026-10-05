@@ -2,6 +2,7 @@
 #include "SimdConvert.h"
 #include <render/Material.h>
 #include <render/NativeMaterial.h>
+#include <render/Renderable.h>
 #include <ecs/Entity.h>
 
 bool Material_transparent(const void* ptr)
@@ -28,6 +29,11 @@ float Material_alphaCutoff(const void* ptr)
 bool Material_depthWrite(const void* ptr)
 {
     return reinterpret_cast<const Material*>(ptr)->depthWrite();
+}
+
+bool Material_castsGroundShadow(const void* ptr)
+{
+    return Renderable::castsGroundShadow(*reinterpret_cast<const Material*>(ptr));
 }
 
 bool Material_depthOcclusion(const void* ptr)

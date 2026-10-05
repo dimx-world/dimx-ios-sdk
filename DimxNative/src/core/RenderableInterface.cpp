@@ -18,24 +18,14 @@ const void* Renderable_mesh(const void* ptr, long index)
     return reinterpret_cast<const Renderable*>(ptr)->meshes().at(index).get();
 }
 
-bool Renderable_castShadow(const void* ptr)
+bool Renderable_castsGroundShadow(const void* ptr)
 {
-    return reinterpret_cast<const Renderable*>(ptr)->castShadow();
-}
-
-bool Renderable_receiveShadows(const void* ptr)
-{
-    return reinterpret_cast<const Renderable*>(ptr)->receiveShadows();
+    return reinterpret_cast<const Renderable*>(ptr)->castsGroundShadow();
 }
 
 bool Renderable_occlusion(const void* ptr)
 {
     return reinterpret_cast<const Renderable*>(ptr)->occlusion();
-}
-
-bool Renderable_shadowPass(const void* ptr)
-{
-    return reinterpret_cast<const Renderable*>(ptr)->shadowPass();
 }
 
 void Renderable_nodeTransform(const void* ptr, void* outBuf)

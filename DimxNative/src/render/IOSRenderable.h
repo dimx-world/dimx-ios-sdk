@@ -11,9 +11,6 @@ struct SwiftRenderable
     void (*deleteRenderable)(long);
     void (*render)(long);
     void (*setHighlightFactor)(long, float);
-    void (*setCastShadow)(long, bool);
-    void (*setReceiveShadows)(long, bool);
-    void (*setShadowPass)(long, bool);
     void (*setOcclusion)(long, bool);
     void (*setTransparent)(long, bool);
 };
@@ -36,10 +33,7 @@ public:
 
     void setHighlightFactor(float factor) override;
 
-    virtual void setCastShadow(bool value) override;
-    virtual void setReceiveShadows(bool value) override;
     virtual void setOcclusion(bool value) override;
-    virtual void setShadowPass(bool value) override;
 
 private:
     long mNativeId = -1;

@@ -17,7 +17,6 @@ struct StandardVertexUniforms {
     var vViewProjMat: matrix_float4x4 = matrix_float4x4()
     var vModelMat: matrix_float4x4 = matrix_float4x4()
     var vNormalMat: matrix_float3x3 = matrix_float3x3()
-    var vLightSpaceMat: matrix_float4x4 = matrix_float4x4()
     var vUvTransform: matrix_float3x3 = matrix_identity_float3x3
 
     var vNumMeshVerts: CInt = 0

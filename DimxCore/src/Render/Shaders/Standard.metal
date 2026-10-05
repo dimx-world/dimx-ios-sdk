@@ -1,6 +1,7 @@
 #include <metal_stdlib>
 
 #include "ShaderCommon.h"
+#include "DepthOcclusion.h"
 
 using namespace metal;
 
@@ -17,7 +18,6 @@ constant bool VAJointIndices4 [[function_constant(FCJointIndices4Attr)]];
 constant bool VAJointWeights4 [[function_constant(FCJointWeights4Attr)]];
 
 constant bool OcclusionPass   [[function_constant(FCOcclusionPass)]];
-constant bool ShadowsPass     [[function_constant(FCShadowsPass)]];
 constant bool MorphEnabled    [[function_constant(FCMorphEnabled)]];
 constant bool MorphNormals    [[function_constant(FCMorphNormals)]];
 constant bool JointTransformsConst = VAJointIndex || VAJointIndices4;
@@ -50,7 +50,6 @@ struct StandardVertexOut {
     float2 texCoords [[function_constant(VATexCoord)]];
     float4 color     [[function_constant(VAColor)]];
     float3 worldSpacePos;
-    float4 lightSpacePos;
     // The position in clip space, as written: [[position]] reaches the fragment
     // in window coordinates, and the depth occlusion wants NDC and the depth.
     float4 clipPos;
@@ -69,70 +68,6 @@ float4x4 calcJointMatrix(float4 indices, float4 weights, constant const float4x4
            jointTransforms[(int)indices[1]] * weights[1] +
            jointTransforms[(int)indices[2]] * weights[2] +
            jointTransforms[(int)indices[3]] * weights[3];
-}
-
-float calcShadow(depth2d<float> shadowMap, float4 lightSpacePos, constant StandardFragmentUniforms& uniforms)
-{
-    constexpr float bias = 0.005;
-    constexpr sampler shadowMapSampler(filter::nearest, address::clamp_to_zero, compare_func::less);
-    // Kernel used:
-    // 0   4   7   4   0
-    // 4   16  26  16  4
-    // 7   26  41  26  7
-    // 4   16  26  16  4
-    // 0   4   7   4   0
-    struct SampleInfo {
-        float weight;
-        float2 shift;
-    };
-    const int numSamples = 21;
-    const float totalWeights = 269.0;
-    const SampleInfo samples[numSamples] = {
-        {41.0, {0.0,  0.0}},
-        {26.0, {1.0,  0.0}},
-        {26.0, {1.0,  0.0}},
-        {26.0, {0.0, -1.0}},
-        {26.0, {0.0,  1.0}},
-        {16.0, {1.0, -1.0}},
-        {16.0, {1.0, -1.0}},
-        {16.0, {1.0,  1.0}},
-        {16.0, {1.0,  1.0}},
-        { 7.0, {0.0, -2.0}},
-        { 7.0, {2.0,  0.0}},
-        { 7.0, {2.0,  0.0}},
-        { 7.0, {0.0,  2.0}},
-        { 4.0, {1.0, -2.0}},
-        { 4.0, {1.0, -2.0}},
-        { 4.0, {2.0, -1.0}},
-        { 4.0, {2.0, -1.0}},
-        { 4.0, {2.0,  1.0}},
-        { 4.0, {2.0,  1.0}},
-        { 4.0, {1.0,  2.0}},
-        { 4.0, {1.0,  2.0}}
-    };
-    
-    float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-    projCoords.x = projCoords.x * 0.5 + 0.5;
-    projCoords.y = 1.0 - (projCoords.y * 0.5 + 0.5);
-
-    float minLookupStep = 1.0 / uniforms.fShadowMapSize.x * uniforms.fShadowSoftness;
-    float shadow = 0.0;
-    float maxScore = 1.0;
-    for (int i = 0; i < numSamples; ++i) {
-        float shadeScore = shadow / maxScore;
-        float stepFactor = 1.0 + (1.0 - shadeScore * shadeScore) * 10.0;
-        float lookupStep = minLookupStep * stepFactor;
-        float2 texCoords = clamp(projCoords.xy + samples[i].shift * lookupStep, 0.0, 1.0);
-        float depthDist = projCoords.z - shadowMap.sample(shadowMapSampler, texCoords);
-        float sampleShade = depthDist / uniforms.fShadowDecayDistScaled;
-        if (depthDist > bias && sampleShade < 1.0) {
-            maxScore += samples[i].weight;
-            shadow += (1.0 - sampleShade * sampleShade) * samples[i].weight;
-        }
-    }
-    shadow /= totalWeights;
-
-    return shadow * uniforms.fShadowDarkness;
 }
 
 float4 calcLight(float3 faceNormal, constant StandardFragmentUniforms& uniforms)
@@ -211,8 +146,6 @@ vertex StandardVertexOut standard_vertex(StandardVertexIn in [[stage_in]],
     if (VAColor) {
         out.color = in.vColor;
     }
-    
-    out.lightSpacePos = uniforms.vLightSpaceMat * worldSpacePos;
     
     return out;
 }
@@ -307,66 +240,14 @@ float3 calcReflection(StandardVertexOut in, float3 albedo, float3 N, float3 V, f
     return (kD * albedo / PI + specular) * radiance * NdotL;
 }
 //-----------------------------------------------------------------
-// Occlusion by the real world: how much of the fragment the camera's depth
-// leaves in sight (Renderer.updateDepthOcclusion; depth_occlusion.inc is the
-// GL renderer's). depthMap holds metres along the camera's axis, 0 where there
-// is no depth - which hides nothing - and depthMatte how much of each texel
-// that depth stands for: 1 everywhere for LiDAR's scene depth, the person
-// matte for people occlusion, whose depth is only where a person is.
-float depthVisibility(texture2d<float, access::sample> depthMap,
-                      texture2d<half, access::sample> depthMatte,
-                      float2 uv, float assetMM)
-{
-    // Nearest for the depth: a 32-bit float texture is not filterable on every
-    // iPhone, and the kernel around it smooths the edge anyway.
-    constexpr sampler depthSampler(address::clamp_to_edge, filter::nearest);
-    constexpr sampler matteSampler(address::clamp_to_edge, filter::linear);
-    float depthMM = depthMap.sample(depthSampler, uv).r * 1000.0;
-    float matte = float(depthMatte.sample(matteSampler, uv).r);
-
-    // Not a hard depth test: the asset fades into the background along
-    // 2 * kDepthTolerancePerMM of its depth, centred on the background's.
-    constexpr float kDepthTolerancePerMM = 0.015;
-    float visible = clamp(0.5 * (depthMM - assetMM) / (kDepthTolerancePerMM * assetMM) + 0.5, 0.0, 1.0);
-    // A depth near zero is no data, and the far end of the range is no better.
-    float visibleNear = 1.0 - clamp((depthMM - 150.0) / 50.0, 0.0, 1.0);
-    float visibleFar = clamp((depthMM - 7500.0) / 500.0, 0.0, 1.0);
-    visible = max(visible, max(visibleNear, visibleFar));
-
-    return mix(1.0, visible, matte);
-}
-
-// 1 unless this draw is occluded; then the visibility over the fragment's
-// neighbourhood, so that an edge fades rather than steps - a 3x3 tent of taps
-// 1.5 blur units apart, as depth_occlusion.inc.
+// Occlusion by the real world (DepthOcclusion.h), for this draw.
 float calcOcclusion(StandardVertexOut in,
                     constant StandardFragmentUniforms& uniforms,
                     texture2d<float, access::sample> depthMap,
                     texture2d<half, access::sample> depthMatte)
 {
-    if (!uniforms.fUseDepthOcclusion) {
-        return 1.0;
-    }
-    // Divided per fragment: the perspective division does not interpolate
-    // linearly across a triangle.
-    float2 ndc = in.clipPos.xy / in.clipPos.w;
-    float2 uv = (uniforms.fDepthMapUVTransform * float3(ndc, 1.0)).xy;
-    // A perspective projection's clip-space w is the depth along the camera's axis.
-    float assetMM = in.clipPos.w * 1000.0;
-
-    constexpr float kBlur = 1.5 * 0.01;
-    float2 d = float2(kBlur, kBlur * uniforms.fDepthMapAspectRatio);
-
-    float sum = 4.0 * depthVisibility(depthMap, depthMatte, uv, assetMM);
-    sum += 2.0 * (depthVisibility(depthMap, depthMatte, uv + float2(+d.x, 0.0), assetMM)
-                + depthVisibility(depthMap, depthMatte, uv + float2(-d.x, 0.0), assetMM)
-                + depthVisibility(depthMap, depthMatte, uv + float2(0.0, +d.y), assetMM)
-                + depthVisibility(depthMap, depthMatte, uv + float2(0.0, -d.y), assetMM));
-    sum += depthVisibility(depthMap, depthMatte, uv + float2(+d.x, +d.y), assetMM)
-         + depthVisibility(depthMap, depthMatte, uv + float2(-d.x, +d.y), assetMM)
-         + depthVisibility(depthMap, depthMatte, uv + float2(+d.x, -d.y), assetMM)
-         + depthVisibility(depthMap, depthMatte, uv + float2(-d.x, -d.y), assetMM);
-    return sum / 16.0;
+    return calcOcclusionAt(in.clipPos, uniforms.fUseDepthOcclusion, uniforms.fDepthMapUVTransform,
+                           uniforms.fDepthMapAspectRatio, depthMap, depthMatte);
 }
 //-----------------------------------------------------------------
 // Premultiplied out. The pipeline blends ONE / ONE_MINUS_SRC_ALPHA for every
@@ -382,7 +263,6 @@ float4 blendOut(float4 color, int blendMode)
 //-----------------------------------------------------------------
 fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
                                  constant StandardFragmentUniforms& uniforms [[buffer(FBIUniforms)]],
-                                 depth2d<float> shadowMap [[texture(FTIShadowMap)]],
                                  texturecube<half, access::sample> irradianceMap [[texture(FTIIrradianceMap)]],
                                  texturecube<half, access::sample> radianceMap [[texture(FTIRadianceMap)]],
                                  texture2d<half, access::sample> baseColorMap [[texture(FTIBaseColorMap), function_constant(MPBaseColorMap)]],
@@ -398,12 +278,6 @@ fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
     if (OcclusionPass) {
         // In OpenGL we can disable color write. But in Metal we just write a fully transparent pixel. The depth write goes as normal.
         return float4(0, 0, 0, 0);
-    }
-
-    if (ShadowsPass) {
-        // A shadow lies on the real ground: whatever real stands in front hides it too.
-        return float4(0, 0, 0, calcShadow(shadowMap, in.lightSpacePos, uniforms)
-                               * calcOcclusion(in, uniforms, depthMap, depthMatte));
     }
 
     // Signed-distance-field text (3D world text via Text2DBuilder / SdfText material). The atlas
@@ -528,10 +402,6 @@ fragment float4 standard_fragment(StandardVertexOut in [[stage_in]],
     //baseColor.xyz = float3(specularLod);
     
     float4 outColor = (baseColor + uniforms.fAddColor) * uniforms.fMultColor;
-    
-    if (uniforms.fReceiveShadows) {
-        outColor.xyz *= 1.0 - calcShadow(shadowMap, in.lightSpacePos, uniforms);
-    }
 
     outColor.a *= calcOcclusion(in, uniforms, depthMap, depthMatte);
 

@@ -31,21 +31,6 @@ void IOSRenderable::setHighlightFactor(float factor)
     g_swiftRenderable()->setHighlightFactor(mNativeId, factor);
 }
 
-void IOSRenderable::setCastShadow(bool value)
-{
-    g_swiftRenderable()->setCastShadow(mNativeId, value);
-}
-
-void IOSRenderable::setReceiveShadows(bool value)
-{
-    g_swiftRenderable()->setReceiveShadows(mNativeId, value);
-}
-
-void IOSRenderable::setShadowPass(bool value)
-{
-    g_swiftRenderable()->setShadowPass(mNativeId, value);
-}
-
 void IOSRenderable::setOcclusion(bool value)
 {
     g_swiftRenderable()->setOcclusion(mNativeId, value);

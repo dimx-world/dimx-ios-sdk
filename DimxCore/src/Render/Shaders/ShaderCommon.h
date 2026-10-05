@@ -25,7 +25,6 @@ struct StandardVertexUniforms {
     matrix_float4x4 vViewProjMat;
     matrix_float4x4 vModelMat;
     matrix_float3x3 vNormalMat;
-    matrix_float4x4 vLightSpaceMat;
 
     // Affine texture-coordinate transform, applied as uv' = (M * float3(uv, 1)).xy.
     // Materials that declare a "uvTransform" Mat3 parameter drive it; the rest keep
@@ -53,7 +52,6 @@ struct StandardFragmentUniforms {
     vector_float3 fCameraPos;
     
     bool fReceiveLighting;
-    bool fReceiveShadows;
 
     float fRadianceMaxLod;
 
@@ -61,11 +59,6 @@ struct StandardFragmentUniforms {
     vector_float3 fLightAmbientColor;
     vector_float3 fLightDiffuseColor;
     vector_float3 fLightSpecularColor;
-    
-    vector_float2 fShadowMapSize;
-    float fShadowSoftness;
-    float fShadowDarkness;
-    float fShadowDecayDistScaled;
 
     // Occlusion by the real world (Renderer.updateDepthOcclusion): whether this
     // draw is occluded, the transform from screen NDC to the camera image's
@@ -81,6 +74,23 @@ struct StandardFragmentUniforms {
     int fBlendMode;
     float fAlphaCutoff;
     bool fBaseColorMapPremultiplied;
+};
+
+// The ground shadow's quad (GroundShadowPass, GroundShadow.metal): the square
+// (u, 0, v) onto the ground region by quadMat, black at opacity times the
+// blurred darkness, faded by the real world's depth like the content.
+struct GroundShadowUniforms {
+    matrix_float4x4 viewProjMat;
+    matrix_float4x4 quadMat;
+    matrix_float3x3 depthMapUVTransform;
+    float opacity;
+    float depthMapAspectRatio;
+    bool useDepthOcclusion;
+};
+
+// One axis of the ground shadow's blur: a tap's step in texture coordinates.
+struct GroundShadowBlurUniforms {
+    vector_float2 step;
 };
 
 typedef NS_ENUM(NSInteger, VertexAttribute)
@@ -115,8 +125,7 @@ typedef NS_ENUM(NSInteger, FragmentBufferIndex)
 
 typedef NS_ENUM(NSInteger, FragmentTextureIndex)
 {
-    FTIShadowMap = 0,
-    FTIDepthMap,
+    FTIDepthMap = 0,
     FTIIrradianceMap,
     FTIRadianceMap,
     FTIBaseColorMap,
@@ -145,7 +154,6 @@ typedef NS_ENUM(NSInteger, FunctionConstant)
     
     // Add other constants below
     FCOcclusionPass,
-    FCShadowsPass,
     FCMorphEnabled,
     FCMorphNormals,
     

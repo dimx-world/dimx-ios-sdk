@@ -18,6 +18,8 @@ bool Material_transparent(const void* ptr);
 long Material_effectiveBlend(const void* ptr);
 float Material_alphaCutoff(const void* ptr);
 bool Material_depthWrite(const void* ptr);
+// Whether a mesh drawn with it casts a ground shadow (Renderable::castsGroundShadow).
+bool Material_castsGroundShadow(const void* ptr);
 bool Material_depthOcclusion(const void* ptr);
 long Material_cullMode(const void* ptr);
 long Material_sortPriority(const void* ptr);

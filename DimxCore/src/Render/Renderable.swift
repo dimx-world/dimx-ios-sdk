@@ -8,11 +8,12 @@ class Renderable
     var meshes: [RenderableMesh] = []
     let coreRenderable: UnsafeRawPointer
     private var scene: Scene?
-    
-    var castShadow = false
-    var receiveShadows = false
+
     var occlusion = false
-    var shadowPass = false
+
+    // One of its scene's ground shadow casters this frame, as core decided
+    // before handing it over (Renderable::castsGroundShadow).
+    var castsGroundShadow: Bool { Renderable_castsGroundShadow(coreRenderable) }
 
     static func initCallbacks() {
         g_swiftRenderable().pointee.createRenderable = { (coreRend: Optional<UnsafeRawPointer>) -> (Int) in return Renderable.create(coreRend!) }
@@ -21,18 +22,6 @@ class Renderable
         g_swiftRenderable().pointee.setHighlightFactor = {
             (id: Int, factor: Float) -> () in
             Renderer.instance.renderables[id]!.setHighlightFactor(factor)
-        }
-        g_swiftRenderable().pointee.setCastShadow = {
-            (id: Int, value: Bool) -> () in
-            Renderer.instance.renderables[id]!.castShadow = value
-        }
-        g_swiftRenderable().pointee.setReceiveShadows = {
-            (id: Int, value: Bool) -> () in
-            Renderer.instance.renderables[id]!.receiveShadows = value
-        }
-        g_swiftRenderable().pointee.setShadowPass = {
-            (id: Int, value: Bool) -> () in
-            Renderer.instance.renderables[id]!.shadowPass = value
         }
         g_swiftRenderable().pointee.setOcclusion = {
             (id: Int, value: Bool) -> () in
@@ -56,10 +45,7 @@ class Renderable
             meshes.append(RenderableMesh(self, meshPtr))
         }
         
-        castShadow = Renderable_castShadow(coreRend)
-        receiveShadows = Renderable_receiveShadows(coreRend)
         occlusion = Renderable_occlusion(coreRend)
-        shadowPass = Renderable_shadowPass(coreRend)
     }
 
     func nodeTransform() -> matrix_float4x4 {

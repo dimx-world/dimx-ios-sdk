@@ -15,25 +15,16 @@ class Scene
     let id: Int
     let coreScene: UnsafeRawPointer
     let lighting: Lighting
-    let shadowMap: MTLTexture?
+    // Its ground shadow's targets, made by GroundShadowPass on first use.
+    var groundShadowTarget: GroundShadowTarget? = nil
     var skyboxIrradianceMap: Texture? = nil
     var skyboxRadianceMap: Texture? = nil
     var skyboxRadianceMaxLod: Int = 0
-    
+
     init(_ idx: Int, _ renderer: Renderer, _ ptr: UnsafeRawPointer) {
         id = idx
         coreScene = ptr
         lighting = Lighting(Scene_lighting(ptr))
-        if (lighting.shadowEnabled) {
-            let shadowMapTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
-                                                                                      width: lighting.shadowMapSize, height: lighting.shadowMapSize,
-                                                                                      mipmapped: false)
-            shadowMapTextureDescriptor.usage = [.shaderRead, .renderTarget]
-            shadowMap = renderer.device.makeTexture(descriptor: shadowMapTextureDescriptor)
-            shadowMap!.label = "shadow map"
-        } else {
-            shadowMap = nil
-        }
 
         let skyboxPtr = Scene_skybox(ptr)
         if skyboxPtr != nil {
@@ -52,7 +43,7 @@ class Scene
     func coreId() -> UInt {
         return Scene_id(coreScene)
     }
-    
+
     func onFrameUpdate() {
         lighting.onFrameUpdate()
     }

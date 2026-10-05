@@ -3,7 +3,8 @@ import Metal
 import DimxNative
 
 // The pass that draws the scene: the stencil writers, then the opaque meshes,
-// then the blended ones back to front. Each mesh's material decides the state
+// then the blended ones back to front - in two calls, so that what has to go
+// between them (the ground shadows) can. Each mesh's material decides the state
 // it is drawn with - depth write, cull mode, and (through its pipeline state)
 // the blend - the same rules as the GL renderer's GlDefaultPass.
 class DefaultPass
@@ -56,7 +57,7 @@ class DefaultPass
     }
 
     func enqueue(_ renderable: Renderable) {
-        if (renderable.occlusion || renderable.shadowPass) && !Settings_displayOcclusionObjects() {
+        if renderable.occlusion && !Settings_displayOcclusionObjects() {
             return;
         }
 
@@ -71,7 +72,26 @@ class DefaultPass
         }
     }
 
-    func renderFrame(_ encoder: MTLRenderCommandEncoder, _ frameContext: FrameContext, _ renderer: Renderer) {
+    // The stencil writers and the opaque meshes.
+    func renderOpaque(_ encoder: MTLRenderCommandEncoder, _ frameContext: FrameContext, _ renderer: Renderer) {
+        // The passes before this one leave the state wherever they finished.
+        restoreState(encoder, renderer)
+
+        for mesh in stencil {
+            drawRenderable(mesh, encoder, frameContext, renderer, depthWrite: false)
+        }
+        stencil.removeAll()
+
+        for mesh in opaque {
+            drawRenderable(mesh, encoder, frameContext, renderer)
+        }
+        opaque.removeAll()
+
+        restoreState(encoder, renderer)
+    }
+
+    // The blended meshes, back to front.
+    func renderTransparent(_ encoder: MTLRenderCommandEncoder, _ frameContext: FrameContext, _ renderer: Renderer) {
         // Back to front, so that every blended fragment lands on all that is
         // behind it. A material's priority comes before its distance: that is
         // how an overlay stays on top of a scene it may well sit inside of.
@@ -90,18 +110,8 @@ class DefaultPass
             return a.offset < b.offset
         }
 
-        // The passes before this one leave the state wherever they finished.
+        // What drew since renderOpaque left the state wherever it finished.
         restoreState(encoder, renderer)
-
-        for mesh in stencil {
-            drawRenderable(mesh, encoder, frameContext, renderer, depthWrite: false)
-        }
-        stencil.removeAll()
-
-        for mesh in opaque {
-            drawRenderable(mesh, encoder, frameContext, renderer)
-        }
-        opaque.removeAll()
 
         for entry in order {
             drawRenderable(entry.element, encoder, frameContext, renderer)
@@ -124,7 +134,7 @@ class DefaultPass
         }
         applyState(encoder, state!, material.cullMode)
 
-        material.setupRender(renderer, encoder, mesh, frameContext, occlusionPass: false, shadowMapPass: false, shadowsPass: false)
+        material.setupRender(renderer, encoder, mesh, frameContext)
         mesh.mesh.draw(encoder)
     }
 

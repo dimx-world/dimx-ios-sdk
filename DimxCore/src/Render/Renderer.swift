@@ -103,8 +103,7 @@ class Renderer
     var defaultPass: DefaultPass!
     var imguiPass: ImGuiPass!
     var debugPass: DebugPass!
-    var shadowMapPass: ShadowMapPass!
-    var shadowsPass: ShadowsPass!
+    var groundShadowPass: GroundShadowPass!
     
     var frameContext = FrameContext()
 
@@ -248,9 +247,7 @@ class Renderer
         occlusionPass = OcclusionPass(self)
         defaultPass = DefaultPass(self)
         debugPass = DebugPass(self)
-        shadowMapPass = ShadowMapPass(self)
-        shadowsPass = ShadowsPass(self)
-        
+        groundShadowPass = GroundShadowPass(self)
     }
     
     func postInit(_ configPtr: UnsafeRawPointer) {
@@ -259,8 +256,6 @@ class Renderer
         occlusionPass = OcclusionPass(renderer: self)
         defaultPass = DefaultPass(renderer: self)
         debugPass = DebugPass(renderer: self)
-        shadowMapPass = ShadowMapPass(renderer: self)
-        shadowsPass = ShadowsPass(renderer: self)
         */
     }
 
@@ -270,6 +265,9 @@ class Renderer
         }
 
         frameContext.populateFromCore(ptr: frameContextPtr)
+        // Here rather than after drawing: a frame that finds no drawable draws
+        // nothing, and its casters must not be queued again on top.
+        groundShadowPass.clearQueue()
     }
     
     private func updateDepthStencilTexture(_ size: CGSize) {
@@ -348,7 +346,9 @@ class Renderer
 
         imguiPass.renderFrame(commandBuffer, nil, frameContext, self)
 
-        shadowMapPass.renderFrame(commandBuffer, frameContext, self)
+        // The ground shadows' own targets, before the frame's: what a scene's
+        // casters look like from below, blurred.
+        groundShadowPass.renderTargets(commandBuffer, frameContext, self)
 
         let passDescriptor = MTLRenderPassDescriptor()
         passDescriptor.colorAttachments[0].texture = drawable.texture
@@ -378,8 +378,12 @@ class Renderer
         commandEncoder.setDepthStencilState(depthStencilState)
         
         occlusionPass.renderFrame(commandEncoder, frameContext, self)
-        defaultPass.renderFrame(commandEncoder, frameContext, self)
-        shadowsPass.renderFrame(commandEncoder, frameContext, self)
+        // The shadows go on the ground after what is opaque - which hides the
+        // part of a shadow behind it - and before what blends, which they would
+        // otherwise darken.
+        defaultPass.renderOpaque(commandEncoder, frameContext, self)
+        groundShadowPass.renderShadows(commandEncoder, frameContext, self)
+        defaultPass.renderTransparent(commandEncoder, frameContext, self)
 
         // The frame as a photo or a video takes it: the content, before the
         // debug lines and the HUD go on.
@@ -604,14 +608,13 @@ class Renderer
     func render(_ renderable: Renderable) {
         occlusionPass.enqueue(renderable)
         defaultPass.enqueue(renderable)
-        if Settings_displayShadows() {
-            shadowMapPass.enqueue(renderable)
-            shadowsPass.enqueue(renderable)
+        if renderable.castsGroundShadow {
+            groundShadowPass.enqueue(renderable)
         }
     }
-    
+
     func createScene(_ ptr: UnsafeRawPointer) -> Int {
-        // ShadowMapPass iterates through all scenes.
+        // GroundShadowPass queues by scene index, through all of them.
         // So we reuse free slots of deleted scenes.
         
         var availableIdx = -1
@@ -639,17 +642,13 @@ class Renderer
             }
         }
         
-        shadowMapPass.resizeScenesQueue(scenes.count)
-        
+        groundShadowPass.resizeScenesQueue(scenes.count)
+
         return availableIdx
     }
-    
+
     func deleteScene(_ id: Int) {
         scenes[Int(id)] = nil
-    }
-
-    func shadowMapTexture() -> MTLTexture {
-        return shadowMapPass.shadowMapTexture
     }
 
     func getLibrary() -> MTLLibrary {

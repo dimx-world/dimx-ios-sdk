@@ -12,10 +12,10 @@ unsigned long Renderable_sceneRenderId(const void* ptr);
 long Renderable_numMeshes(const void* ptr);
 const void* Renderable_mesh(const void* ptr, long index);
 
-bool Renderable_castShadow(const void* ptr);
-bool Renderable_receiveShadows(const void* ptr);
+// Whether the renderable is one of its scene's ground shadow casters this frame
+// (Renderable::castsGroundShadow), decided before it is handed to the renderer.
+bool Renderable_castsGroundShadow(const void* ptr);
 bool Renderable_occlusion(const void* ptr);
-bool Renderable_shadowPass(const void* ptr);
 
 void Renderable_nodeTransform(const void* ptr, void* outBuf);
 void Renderable_nodeNormalTransform(const void* ptr, simd_float3x3* out);

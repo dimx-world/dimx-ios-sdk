@@ -18,7 +18,7 @@ class OcclusionPass
     func renderFrame(_ encoder: MTLRenderCommandEncoder, _ frameContext: FrameContext, _ renderer: Renderer) {
         for rend in queue {
             for mesh in rend.meshes {
-                mesh.material.setupRender(renderer, encoder, mesh, frameContext, occlusionPass: true, shadowMapPass: false, shadowsPass: false)
+                mesh.material.setupRender(renderer, encoder, mesh, frameContext, occlusionPass: true)
                 mesh.mesh.draw(encoder)
             }
         }
