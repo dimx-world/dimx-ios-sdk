@@ -28,6 +28,14 @@ class IOSNativeInterface
     setWebAppHost(value) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_WEB_APP_HOST", value: value});
     }
+
+    // The page has its own content on screen: the cover the web screen holds over the
+    // web view while a page loads comes off (WebViewCtrl.liftCover). The page says so
+    // itself because nothing the web view reports can - its first commit and the
+    // document's load both come before a page's bundle has rendered anything.
+    pageReady() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "PAGE_READY"});
+    }
     
     requestTrackingStatus(dimension) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_TRACKING_STATUS", dimension: dimension});

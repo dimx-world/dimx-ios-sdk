@@ -8,6 +8,7 @@
 
 import UIKit
 import WebKit
+import Network
 import DimxNative
 
 class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNavigationDelegate, UIAdaptivePresentationControllerDelegate {
@@ -34,8 +35,82 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     //static private var startupAppUrl: String = ""
     var spinnerView: WKWebView!
     var webView: WKWebView!
-    var versionReloaded = false
     var firstTimeUrlLoad = true
+
+    // The cover over the web view, up from the moment a page starts to load until the
+    // page has its own content on screen. A web view shows nothing between its creation
+    // and the page's first render - the document, the bundle, the bundle's run - and none
+    // of what it reports marks that render: didCommit comes with the empty document,
+    // didFinish with the load, both ahead of the content. So the page says when
+    // (PAGE_READY, WebInterface.js), and announces in its document that it will
+    // (window.__dimxPageReady), which is how a page that never says so - an older build
+    // of the web app, any other site - is told apart and not waited for.
+    //
+    // For the first load the cover shows the host app's launch screen when the app names
+    // it (AppConfig.setAppScreenSplash): the system shows that screen while the app
+    // starts, and an app that opens on this screen goes from it to its page with the same
+    // picture in between. A page loaded again later is covered plainly, with the spinner.
+    private var coverView: UIView!
+    private var launchScreenCtrl: UIViewController?
+    private var coverUp = false
+    private var coverRaisedAt = Date()
+    private var coverGivenUp: DispatchWorkItem?
+    private var pageGivenUp: DispatchWorkItem?
+    private var spinnerLater: DispatchWorkItem?
+    private var spinnerCentred: NSLayoutConstraint!
+    private var spinnerLowered: NSLayoutConstraint!
+    // A page that announced it would report is given this long after its document loaded...
+    private static let coverAfterLoadSeconds = 4.0
+    // ...and no page is covered for longer than this from the start of its load.
+    private static let coverMaxSeconds = 12.0
+    // Over the launch screen the spinner appears only when the load is taking long: a
+    // launch that is quick goes from the picture to the page with nothing in between.
+    private static let spinnerOverLaunchScreenAfterSeconds = 2.0
+    private static let coverFadeSeconds = 0.18
+
+    // Starting without a connection, as Android's WebActivity does it. The page is the web
+    // app's, fetched from its host, and a start in a lift or a basement ended on an empty web
+    // view. But the web view keeps a copy of the page and its files from the last time they
+    // were fetched, and a page started from that copy is the app as it was left: it shows what
+    // it read last and says it is reconnecting. So the page starts from the copy, every time
+    // (loadPage) - at once, whatever the network is doing - and brings itself up to date: as it
+    // starts it asks its host which build is current, and loads that when it is another one
+    // (the page's BuildCheck; a reload of the page's own fetches the document from the host).
+    // A copy that cannot do that - an older page, or one that did not start - is replaced from
+    // the host as soon as it has loaded (documentLoaded). Only a page the web view has no copy
+    // of - a first start offline - leaves the cover up with a message and a button under its
+    // picture (showOfflinePanel), and that screen loads the page by itself once the network
+    // is back.
+    private var pageURL: URL?
+    // The load under way fetches the document from its host rather than the copy, and has not
+    // finished; what it is (the navigation WebKit answers for it) and whether it has arrived.
+    private var loadFromHost = false
+    private var loadUnderWay = false
+    private var currentNavigation: WKNavigation?
+    private var loadCommitted = false
+    // Counts this screen's loads: what the page answers comes later, and an answer asked for
+    // before the load under way began is not about it.
+    private var loadGeneration = 0
+    private var loadStall: DispatchWorkItem?
+    private static let loadStallSeconds = 6.0
+    // A load from the host failed, so a copy that cannot bring itself up to date is shown as it
+    // is rather than sent to the host again - which would go back and forth between the two for
+    // as long as the host does not answer. Cleared by a load from the host that arrives, and by
+    // every try of the offline screen's.
+    private var hostFailed = false
+    // The device has a network (NWPathMonitor); taken as so until the monitor says otherwise.
+    private let pathMonitor = NWPathMonitor()
+    private var deviceOnline = true
+    private var offlinePanel: UIView?
+    private var offlineTitle: UILabel?
+    private var offlineMessage: UILabel?
+    private var offlineButton: UIButton?
+    private var retryWork: DispatchWorkItem?
+    // While the offline screen is up and the device has a network, the page is tried again
+    // after this long, doubling up to the second.
+    private static let retryFirstSeconds = 5.0
+    private static let retryLastSeconds = 30.0
+    private var retryDelay = retryFirstSeconds
 
     // Web views opened by window.open, kept alive while they are on screen.
     private var childWebViewCtrls: [ChildWebViewCtrl] = []
@@ -51,13 +126,12 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
 
         if firstTimeUrlLoad {
             firstTimeUrlLoad = false
-            checkWebVersions()
             var webUrl = Context.inst().convertAppUrlToWebUrl(url)
             if webUrl.isEmpty {
                 webUrl = Context.inst().settings().webAppHost()
             }
             Logger.info("loadWebUrl: first load [\(webUrl)]")
-            webView.load(URLRequest(url: URL(string: webUrl)!))
+            loadPage(URL(string: webUrl)!, fromHost: false)
             return
         }
 
@@ -89,7 +163,7 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             let webUrl = Context.inst().convertAppUrlToWebUrl(url)
             Logger.info("loadWebUrl: the page could not take [\(url)] - loading [\(webUrl)]")
             if let target = URL(string: webUrl) {
-                self.webView.load(URLRequest(url: target))
+                self.loadPage(target, fromHost: false)
             }
         }
     }
@@ -150,9 +224,19 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
          */
         
         containerView.addSubview(webView)
-        
+
+        createCoverView(containerView)
         createSpinnerView(containerView)
-        
+
+        // What the device says of its network, as it changes.
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            self?.pathChanged(path.status == .satisfied)
+        }
+        pathMonitor.start(queue: .main)
+        // Up before the first frame: the page's load starts once this screen is
+        // presented, and the web view must not be seen empty in between.
+        raiseCover()
+
         self.view = containerView
         
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
@@ -231,6 +315,10 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
             let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0
             Telemetry_setLocalPolicy(seconds)
+            return
+        } else if (cmd == "PAGE_READY") {
+            // The page has its own content on screen.
+            liftCover("ready, says")
             return
         }
         fatalError("Unknown web command: [" + cmd + "]")
@@ -566,17 +654,25 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         return URL(string: Context.inst().settings().webAppHost())?.host?.lowercased() ?? ""
     }
 
+    /// The spinner, over the cover and everything else, shown and hidden with it. It sits
+    /// at the centre of a plain cover, and lower over a launch screen, clear of what that
+    /// has at its centre.
     func createSpinnerView(_ containerView: UIView) {
         spinnerView = WKWebView(frame: containerView.bounds)
         spinnerView.isOpaque = false
         spinnerView.backgroundColor = .clear
         spinnerView.scrollView.backgroundColor = .clear
         spinnerView.translatesAutoresizingMaskIntoConstraints = false
+        spinnerView.isUserInteractionEnabled = false
+        spinnerView.isHidden = true
         containerView.addSubview(spinnerView)
 
+        spinnerCentred = spinnerView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor)
+        spinnerLowered = NSLayoutConstraint(item: spinnerView!, attribute: .centerY, relatedBy: .equal,
+                                            toItem: containerView, attribute: .centerY, multiplier: 1.7, constant: 0)
         NSLayoutConstraint.activate([
             spinnerView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-            spinnerView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            spinnerCentred,
             spinnerView.widthAnchor.constraint(equalToConstant: 100),
             spinnerView.heightAnchor.constraint(equalToConstant: 100)
         ])
@@ -594,111 +690,431 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         //Always on top of all subviews
         containerView.bringSubviewToFront(spinnerView)
     }
-    
+
+    private func showSpinner(lowered: Bool) {
+        guard let spinner = spinnerView else { return }
+        if lowered {
+            NSLayoutConstraint.deactivate([spinnerCentred])
+            NSLayoutConstraint.activate([spinnerLowered])
+        } else {
+            NSLayoutConstraint.deactivate([spinnerLowered])
+            NSLayoutConstraint.activate([spinnerCentred])
+        }
+        spinner.isHidden = false
+    }
+
     func hideSpinner() {
-        guard let spinner = self.spinnerView, spinner.superview != nil else { return }
-        self.spinnerView = nil
-        
-        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseOut) {
-            spinner.alpha = 0
-        } completion: { _ in
-            spinner.removeFromSuperview()
+        spinnerView?.isHidden = true
+    }
+
+    /// The cover: a plain surface over the web view, and on it - for the first load -
+    /// the host app's launch screen when it names one.
+    func createCoverView(_ containerView: UIView) {
+        let cover = UIView(frame: containerView.bounds)
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        cover.backgroundColor = .white
+        if let launchScreen = WebViewCtrl.makeLaunchScreen() {
+            launchScreen.view.frame = cover.bounds
+            launchScreen.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            cover.addSubview(launchScreen.view)
+            launchScreenCtrl = launchScreen
+        }
+        containerView.addSubview(cover)
+        coverView = cover
+    }
+
+    /// The host app's launch screen - the storyboard it named with
+    /// AppConfig.setAppScreenSplash, which is the one the system shows while the app
+    /// starts - made again here, so that what covers the page is the picture already
+    /// on screen. Nil when the app named none, or none by that name is in its bundle.
+    private static func makeLaunchScreen() -> UIViewController? {
+        let name = Context.inst().appConfig().appScreenSplash()
+        if name.isEmpty {
+            return nil
+        }
+        // UIStoryboard(name:) raises for a storyboard that is not in the bundle: ask the bundle first.
+        if Bundle.main.path(forResource: name, ofType: "storyboardc") == nil {
+            Logger.warn("WebViewCtrl: no storyboard [\(name)] in the app for the web screen's launch cover - a plain cover instead")
+            return nil
+        }
+        return UIStoryboard(name: name, bundle: Bundle.main).instantiateInitialViewController()
+    }
+
+    private func later(_ seconds: Double, _ work: @escaping () -> Void) -> DispatchWorkItem {
+        let item = DispatchWorkItem(block: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
+        return item
+    }
+
+    /// Covers the web view: a page is about to load, or is loading again.
+    private func raiseCover() {
+        coverGivenUp?.cancel()
+        pageGivenUp?.cancel()
+        spinnerLater?.cancel()
+        guard let cover = coverView else { return }
+        cover.layer.removeAllAnimations()
+        cover.alpha = 1
+        cover.isHidden = false
+        if !coverUp {
+            coverUp = true
+            coverRaisedAt = Date()
+        }
+        if offlinePanel != nil {
+            // The offline screen's button says the page is being tried again.
+            hideSpinner()
+        } else if launchScreenCtrl != nil {
+            hideSpinner()
+            spinnerLater = later(WebViewCtrl.spinnerOverLaunchScreenAfterSeconds) { [weak self] in
+                if self?.coverUp == true {
+                    self?.showSpinner(lowered: true)
+                }
+            }
+        } else {
+            showSpinner(lowered: false)
+        }
+        coverGivenUp = later(WebViewCtrl.coverMaxSeconds) { [weak self] in
+            self?.liftCover("given up on")
         }
     }
-    
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        Logger.info("WebView started loading: \(String(describing: webView.url))")
-    }
-    
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        Logger.info("WebView committed loading: \(String(describing: webView.url))")
-    }
-    
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Logger.info("WebView finished loading: \(String(describing: webView.url))")
+
+    /// Uncovers the web view, once per raise; `why` completes the log line "the cover came off: ... the page".
+    private func liftCover(_ why: String) {
+        if !coverUp {
+            return
+        }
+        coverUp = false
+        coverGivenUp?.cancel()
+        pageGivenUp?.cancel()
+        spinnerLater?.cancel()
+        loadStall?.cancel()
         hideSpinner()
+        hideOfflinePanel()
+        let elapsed = Int(Date().timeIntervalSince(coverRaisedAt) * 1000)
+        Logger.info("WebViewCtrl: the cover came off \(elapsed) ms after it went up: \(why) the page")
+        guard let cover = coverView else { return }
+        UIView.animate(withDuration: WebViewCtrl.coverFadeSeconds, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+            cover.alpha = 0
+        } completion: { [weak self] _ in
+            guard let self = self, !self.coverUp else { return }
+            cover.isHidden = true
+            // The launch screen was the launch's: a page loaded again later is covered plainly.
+            self.launchScreenCtrl?.view.removeFromSuperview()
+            self.launchScreenCtrl = nil
+        }
     }
-    
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error)
-    {
-        Logger.error("WebView failed loading [\(String(describing: webView.url))]: \(error)")
-        hideSpinner()
+
+    /// The page's document has loaded. A page that announced it will say when it is ready
+    /// (window.__dimxPageReady, set by the document itself before anything else runs) is
+    /// waited for a little longer; one that has said so already, or never will, is shown.
+    ///
+    /// A page from the copy that cannot bring itself up to date - one without the page's build
+    /// check (window.__dimxBuildCheck, set as its code starts), an older build or one whose code
+    /// did not start because a file of it is gone from the copy - is loaded from the host instead
+    /// when there is a network and the host has not just failed; otherwise it is shown as it is,
+    /// unless it did not start, which is the offline screen.
+    private func documentLoaded(_ navigation: WKNavigation!) {
+        let ours = navigation === currentNavigation
+        let fromCopy = ours && loadUnderWay && !loadFromHost
+        if ours {
+            loadUnderWay = false
+        }
+        let generation = loadGeneration
+        webView.evaluateJavaScript("({ready: window.__dimxPageReady || null, updates: window.__dimxBuildCheck === true})") { [weak self] (result, _) in
+            guard let self = self, generation == self.loadGeneration else { return }
+            let page = result as? [String: Any]
+            let state = page?["ready"] as? String
+            let updates = (page?["updates"] as? NSNumber)?.boolValue ?? false
+            if fromCopy && !updates, let url = self.pageURL {
+                if self.deviceOnline && !self.hostFailed {
+                    Logger.info("WebViewCtrl: the page from the copy cannot bring itself up to date - loading it from its host")
+                    self.loadPage(url, fromHost: true)
+                    return
+                }
+                if state == "pending" {
+                    Logger.info("WebViewCtrl: the page from the copy did not start, and \(self.deviceOnline ? "its host cannot be reached" : "there is no network") - the offline screen")
+                    self.showOfflinePanel()
+                    return
+                }
+            }
+            if ours {
+                // The page is here: the offline screen's message is no longer so.
+                self.hideOfflinePanel()
+            }
+            guard self.coverUp else { return }
+            if state == "pending" {
+                self.pageGivenUp?.cancel()
+                self.pageGivenUp = self.later(WebViewCtrl.coverAfterLoadSeconds) { [weak self] in
+                    self?.liftCover("given up on")
+                }
+            } else {
+                self.liftCover(state == "ready" ? "ready, says" : "loaded, and nothing more will come from")
+            }
+        }
     }
-    
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error)
-    {
-        Logger.error("WebView failed provisional loading [\(String(describing: webView.url))]: \(error)")
-        hideSpinner()
+
+    /// Loads the page in full. From the web view's copy - .returnCacheDataElseLoad, which WebKit
+    /// hands on to every file the document brings while it loads: taken from the copy however
+    /// old, fetched only when it holds none - unless fromHost asks for the host. Given
+    /// loadStallSeconds to arrive; a failure goes on in pageLoadFailed.
+    private func loadPage(_ url: URL, fromHost: Bool) {
+        pageURL = url
+        loadFromHost = fromHost
+        loadUnderWay = true
+        loadCommitted = false
+        loadGeneration += 1
+        Logger.info("WebViewCtrl: loading [\(url)] from \(loadFromHost ? "its host" : "the web view's copy")")
+        raiseCover()
+        let request = URLRequest(url: url, cachePolicy: loadFromHost ? .useProtocolCachePolicy : .returnCacheDataElseLoad)
+        currentNavigation = webView.load(request)
+        loadStall?.cancel()
+        loadStall = later(WebViewCtrl.loadStallSeconds) { [weak self] in
+            guard let self = self, self.loadUnderWay, !self.loadCommitted else { return }
+            self.webView.stopLoading()
+            self.pageLoadFailed("did not arrive within \(Int(WebViewCtrl.loadStallSeconds)) s")
+        }
     }
-    
-    func checkWebVersions() {
-        for versionUrl in Context.inst().appConfig().webVersions() {
-            Logger.info("Checking web version: \(versionUrl)")
-            
-            guard let url = URL(string: versionUrl) else {
-                Logger.info("Invalid version url: \(versionUrl)")
+
+    /// The page could not be had: the page in place when it was the host's (showPageInPlace),
+    /// else the offline screen.
+    private func pageLoadFailed(_ why: String) {
+        loadStall?.cancel()
+        loadUnderWay = false
+        guard pageURL != nil else { return }
+        if loadFromHost {
+            hostFailed = true
+            showPageInPlace(why)
+            return
+        }
+        Logger.info("WebViewCtrl: the page \(why) - the offline screen")
+        showOfflinePanel()
+    }
+
+    /// A load from the host that does not arrive leaves the page the web view showed in place and
+    /// running: the page from the copy, which is shown as it is when it has started, and is the
+    /// offline screen when it has not. It is not loaded from the copy again: WebKit takes a load of
+    /// the address it shows from the network, whatever the request asks (FrameLoader takes it for
+    /// the same page, and ignores the cache).
+    private func showPageInPlace(_ why: String) {
+        let generation = loadGeneration
+        webView.evaluateJavaScript("({ready: window.__dimxPageReady || null, updates: window.__dimxBuildCheck === true})") { [weak self] (result, _) in
+            guard let self = self, generation == self.loadGeneration else { return }
+            let page = result as? [String: Any]
+            let state = page?["ready"] as? String
+            let updates = (page?["updates"] as? NSNumber)?.boolValue ?? false
+            if state == "pending" && !updates {
+                Logger.info("WebViewCtrl: the page \(why) from its host, and the page from the copy did not start - the offline screen")
+                self.showOfflinePanel()
                 return
             }
-            
-            let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
-            let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-                guard let strongSelf = self else {
-                    return
-                }
-
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    return
-                }
-                
-                if httpResponse.statusCode < 200 || httpResponse.statusCode > 299 {
-                    Logger.info("Failed to fetch web version [\(versionUrl)]. Status code [\(httpResponse.statusCode)]")
-                    return
-                }
-                
-                if let data = data, let rawVersion = String(data: data, encoding: .utf8) {
-                    let version = rawVersion.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if version.isEmpty {
-                        Logger.info("Ignoring empty web version [\(versionUrl)]")
-                        return
-                    }
-
-                    let cachedVersion = Context.inst().settings().getWebVersion(versionUrl)
-                    let normalizedCachedVersion = cachedVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    Logger.info("Web versions [\(versionUrl)] cached [\(String(describing: normalizedCachedVersion))] latest [\(version)]")
-
-                    if version == normalizedCachedVersion {
-                        return
-                    }
-                    Logger.info("Saving new web version [\(versionUrl)]: \(version)")
-                    Context.inst().settings().setWebVersion(versionUrl, version)
-
-                    if normalizedCachedVersion == nil {
-                        return
-                    }
-
-                    Logger.info("Version changed [\(versionUrl)]. Requesting reload.")
-                    DispatchQueue.main.async {
-                        if !strongSelf.versionReloaded {
-                            strongSelf.versionReloaded = true
-                            
-                            let websiteDataTypes = NSSet(array: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache])
-                            let date = Date(timeIntervalSince1970: 0)
-                            Logger.info("Cleaning web cache..")
-                            WKWebsiteDataStore.default().removeData(ofTypes: websiteDataTypes as! Set<String>, modifiedSince: date, completionHandler: {
-                                if strongSelf.webView.url != nil {
-                                    Logger.info("Reloading url: \(String(describing: strongSelf.webView.url))")
-                                    strongSelf.webView.load(URLRequest(url: strongSelf.webView.url!))
-                                }
-                            })
-                        }
-                    }
-                }
-            }
-            
-            task.resume()
+            Logger.info("WebViewCtrl: the page \(why) from its host - the page from the copy stays")
+            self.hideOfflinePanel()
+            self.liftCover("the host did not answer; kept")
         }
     }
-    
+
+    /// Says why there is no page, under the cover's picture - the launch screen at a launch,
+    /// which stays up - with a button that tries again. The page is tried again by itself too:
+    /// when the device comes back online (pathChanged), when the app returns to the foreground,
+    /// and every so often while the device says it is online - the host may be what was missing.
+    /// The cover stays until a page is up.
+    private func showOfflinePanel() {
+        coverGivenUp?.cancel()
+        pageGivenUp?.cancel()
+        spinnerLater?.cancel()
+        hideSpinner()
+        if let cover = coverView {
+            cover.layer.removeAllAnimations()
+            cover.alpha = 1
+            cover.isHidden = false
+            coverUp = true
+        }
+        if offlinePanel == nil {
+            createOfflinePanel()
+        }
+        if let panel = offlinePanel {
+            view.bringSubviewToFront(panel)
+        }
+        offlineTitle?.text = WebViewCtrl.offlineText(deviceOnline ? "unreachable_title" : "offline_title")
+        offlineMessage?.text = WebViewCtrl.offlineText(deviceOnline ? "unreachable_message" : "offline_message")
+        offlineButton?.isEnabled = true
+        offlineButton?.configuration?.title = WebViewCtrl.offlineText("retry")
+        retryWork?.cancel()
+        if deviceOnline {
+            retryWork = later(retryDelay) { [weak self] in
+                self?.retryPage("trying again by itself")
+            }
+            retryDelay = min(retryDelay * 2, WebViewCtrl.retryLastSeconds)
+        }
+    }
+
+    /// The offline screen's message and button, below the middle of the screen so the picture
+    /// there stays where it was.
+    private func createOfflinePanel() {
+        let title = UILabel()
+        title.font = .systemFont(ofSize: 18, weight: .semibold)
+        title.textColor = UIColor(red: 0x1F / 255, green: 0x29 / 255, blue: 0x37 / 255, alpha: 1)
+        title.textAlignment = .center
+        title.numberOfLines = 0
+        let message = UILabel()
+        message.font = .systemFont(ofSize: 15)
+        message.textColor = UIColor(red: 0x6B / 255, green: 0x72 / 255, blue: 0x80 / 255, alpha: 1)
+        message.textAlignment = .center
+        message.numberOfLines = 0
+        // The web app's blue.
+        var style = UIButton.Configuration.filled()
+        style.baseBackgroundColor = UIColor(red: 0x23 / 255, green: 0x6A / 255, blue: 0xF6 / 255, alpha: 1)
+        style.cornerStyle = .capsule
+        style.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 28, bottom: 12, trailing: 28)
+        let button = UIButton(configuration: style, primaryAction: UIAction { [weak self] _ in
+            self?.retryPage("Try again")
+        })
+        let panel = UIStackView(arrangedSubviews: [title, message, button])
+        panel.axis = .vertical
+        panel.alignment = .center
+        panel.spacing = 8
+        panel.setCustomSpacing(20, after: message)
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            panel.topAnchor.constraint(equalTo: view.centerYAnchor, constant: 120),
+            panel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
+            panel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
+            message.widthAnchor.constraint(lessThanOrEqualToConstant: 320)
+        ])
+        offlinePanel = panel
+        offlineTitle = title
+        offlineMessage = message
+        offlineButton = button
+    }
+
+    private func hideOfflinePanel() {
+        retryWork?.cancel()
+        retryDelay = WebViewCtrl.retryFirstSeconds
+        offlinePanel?.removeFromSuperview()
+        offlinePanel = nil
+        offlineTitle = nil
+        offlineMessage = nil
+        offlineButton = nil
+    }
+
+    /// Loads the page again; the offline screen stays, saying so, until the outcome.
+    private func retryPage(_ why: String) {
+        guard let url = pageURL else { return }
+        Logger.info("WebViewCtrl: loading the page again (\(why))")
+        retryWork?.cancel()
+        hostFailed = false
+        offlineButton?.isEnabled = false
+        offlineButton?.configuration?.title = WebViewCtrl.offlineText("connecting")
+        loadPage(url, fromHost: false)
+    }
+
+    private func pathChanged(_ online: Bool) {
+        guard online != deviceOnline else { return }
+        deviceOnline = online
+        Logger.info("WebViewCtrl: the device is \(online ? "online" : "offline")")
+        guard offlinePanel != nil else { return }
+        if online {
+            retryDelay = WebViewCtrl.retryFirstSeconds
+            retryPage("back online")
+        } else if !loadUnderWay {
+            // Says so, and stops trying by itself until the network is back.
+            showOfflinePanel()
+        }
+    }
+
+    /// The offline screen's words, in the web app's languages; English otherwise.
+    private static func offlineText(_ key: String) -> String {
+        let english = [
+            "offline_title": "No internet connection",
+            "offline_message": "The app opens by itself as soon as you're back online.",
+            "unreachable_title": "Can't connect",
+            "unreachable_message": "The server can't be reached right now. The app keeps trying by itself.",
+            "retry": "Try again",
+            "connecting": "Connecting…",
+        ]
+        let translations = [
+            "ru": [
+                "offline_title": "Нет подключения к интернету",
+                "offline_message": "Приложение откроется само, как только появится подключение.",
+                "unreachable_title": "Не удаётся подключиться",
+                "unreachable_message": "Сервер сейчас недоступен. Приложение продолжает попытки само.",
+                "retry": "Повторить",
+                "connecting": "Подключение…",
+            ],
+            "he": [
+                "offline_title": "אין חיבור לאינטרנט",
+                "offline_message": "האפליקציה תיפתח מעצמה ברגע שהחיבור יחזור.",
+                "unreachable_title": "לא ניתן להתחבר",
+                "unreachable_message": "לא ניתן להגיע לשרת כרגע. האפליקציה ממשיכה לנסות מעצמה.",
+                "retry": "נסו שוב",
+                "connecting": "מתחבר…",
+            ],
+        ]
+        var language = String(Locale.preferredLanguages.first?.prefix(2) ?? "en")
+        if language == "iw" {
+            language = "he"
+        }
+        return translations[language]?[key] ?? english[key] ?? key
+    }
+
+    /// A navigation that ended without failing: one this screen or the page replaced, or one the
+    /// policy handler sent elsewhere.
+    private static func isInterruption(_ error: Error) -> Bool {
+        let error = error as NSError
+        return (error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled)
+            || (error.domain == "WebKitErrorDomain" && (error.code == 102 || error.code == 204))
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        Logger.info("WebView started loading: \(String(describing: webView.url))")
+        raiseCover()
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        Logger.info("WebView committed loading: \(String(describing: webView.url))")
+        if navigation === currentNavigation {
+            loadCommitted = true
+            loadStall?.cancel()
+            if loadFromHost {
+                hostFailed = false
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        Logger.info("WebView finished loading: \(String(describing: webView.url))")
+        documentLoaded(navigation)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error)
+    {
+        if WebViewCtrl.isInterruption(error) {
+            return
+        }
+        Logger.error("WebView failed loading [\(String(describing: webView.url))]: \(error)")
+        // The document came and the rest of it did not: what the web view shows is all there is.
+        if navigation === currentNavigation {
+            loadUnderWay = false
+        }
+        liftCover("the load failed for")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error)
+    {
+        if WebViewCtrl.isInterruption(error) {
+            return
+        }
+        Logger.error("WebView failed provisional loading [\(String(describing: webView.url))]: \(error)")
+        // A load of the page's own that fails leaves the page it had in place; one of this
+        // screen's is the copy next, or the offline screen.
+        guard navigation === currentNavigation else {
+            liftCover("the load failed for")
+            return
+        }
+        pageLoadFailed("failed to load (\(error.localizedDescription))")
+    }
+
     func notifyWebViewHide() {
         let jscode =
             """
@@ -762,6 +1178,11 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         if view.window != nil {
             print("WebViewCtrl: app will enter foreground")
             notifyWebViewShow()
+            // A return to the foreground is a moment to try again: the device may have moved
+            // while it was away, and its network says nothing of a host that came back.
+            if offlinePanel != nil {
+                retryPage("back on the screen")
+            }
         }
     }
 }

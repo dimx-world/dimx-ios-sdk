@@ -10,7 +10,6 @@ import Foundation
 
 public class AppSettings {
     static private let WEB_APP_HOST_KEY = "web_app_host"
-    static private let WEB_VERSION_KEY = "web_version_"
 
     // The install id has a file and a class of its own: it is the one setting here
     // that must not be restored onto another device, and the one two threads ask
@@ -41,13 +40,5 @@ public class AppSettings {
         mWebAppHost = value
         UserDefaults.standard.setValue(mWebAppHost, forKey: AppSettings.WEB_APP_HOST_KEY)
         Logger.info("Setting web app host: \(String(describing: mWebAppHost))")
-    }
-    
-    func getWebVersion(_ key: String) -> String? {
-        return UserDefaults.standard.string(forKey: AppSettings.WEB_VERSION_KEY + key)
-    }
-    
-    func setWebVersion(_ key: String, _ value: String) {
-        UserDefaults.standard.setValue(value, forKey: AppSettings.WEB_VERSION_KEY + key)
     }
 }

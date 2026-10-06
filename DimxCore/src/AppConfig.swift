@@ -15,7 +15,7 @@ public class AppConfig
     private var mShowAppScreenAction: ((String) -> Void)?
     private var mSharePhotoEnabled: Bool = false
     private var mShareVideoEnabled: Bool = false
-    private var mWebVersions: [String] = []
+    private var mAppScreenSplash: String = ""
     private var mGoogleClientId: String = ""
     private var mAppleSignInEnabled: Bool = true
     // Telemetry (the engine's TelemetryManager, posting to the platform's
@@ -53,14 +53,21 @@ public class AppConfig
         mShareVideoEnabled = value
     }
     
-    public func addWebVersion(_ url: String) {
-        mWebVersions.append(url)
-    }
-    
-    public func webVersions() -> [String] {
-        return mWebVersions
+    /// The app's launch screen, by its storyboard's name ("LaunchScreen"), for the web
+    /// screen to show while its first page loads. The system shows that screen while
+    /// the app starts; an app that opens on the web screen names it here, and the
+    /// screen holds the same picture over the web view until the page has its content
+    /// up - one picture from the tap on the icon to the page, with no blank web view
+    /// in between. Unset, and for any page loaded again later, the screen covers a
+    /// loading page with a plain surface and its spinner.
+    public func setAppScreenSplash(_ storyboardName: String) {
+        mAppScreenSplash = storyboardName
     }
 
+    func appScreenSplash() -> String {
+        return mAppScreenSplash
+    }
+    
     // Overrides the OAuth client id used for native Google sign-in. Left unset, it comes
     // from GoogleService-Info.plist (CLIENT_ID) or the GIDClientID Info.plist key; with
     // none of the three, the web page falls back to its own popup for Google - which
