@@ -35,6 +35,12 @@ class ARViewCtrl: UIViewController, UITextInputTraits {
         return view as! ARView
     }
 
+    // Live View is the whole screen: no status bar over the camera, and the home indicator
+    // fades while it is not touched - as Android's ARActivity goes immersive. The web screen
+    // keeps both (WebViewCtrl).
+    override var prefersStatusBarHidden: Bool { true }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 

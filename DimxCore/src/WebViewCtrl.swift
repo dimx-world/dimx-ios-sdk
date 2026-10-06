@@ -115,6 +115,13 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     // Web views opened by window.open, kept alive while they are on screen.
     private var childWebViewCtrls: [ChildWebViewCtrl] = []
 
+    // The web app's footer (--dx-light-grey-color), for the strip behind the home indicator.
+    private static let footerColor = UIColor(red: 0xF7 / 255.0, green: 0xF7 / 255.0, blue: 0xF8 / 255.0, alpha: 1)
+
+    // The status bar stays over this screen, dark on the white behind it whatever the
+    // device's appearance: the default would turn it white in dark mode.
+    override var prefersStatusBarHidden: Bool { false }
+    override var preferredStatusBarStyle: UIStatusBarStyle { .darkContent }
 
     /// Shows the app at `url` - the app's own form, `https://go.dimx.world/...`, or empty for
     /// the page as it is (the way back from the AR screen). The first time the page is loaded
@@ -222,8 +229,31 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
          webView.scrollView.alwaysBounceVertical = false
          webView.scrollView.alwaysBounceHorizontal = false
          */
-        
+
+        // The page lies between the status bar and the home indicator, as Android's
+        // WebActivity lays it out within the system bars (fitsSystemWindows). Above and below
+        // it is this screen's own: the container's white behind the status bar, under the
+        // page's white header, and the footer's grey behind the home indicator, under the
+        // page's footer. The cover and the spinner keep the whole screen - the cover carries
+        // the launch screen, laid out on the whole screen as the system's own is, and a cover
+        // the size of the page would move its picture at the hand-over.
+        let bottomStrip = UIView()
+        bottomStrip.backgroundColor = WebViewCtrl.footerColor
+        bottomStrip.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(bottomStrip)
+        webView.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(webView)
+        let safeArea = containerView.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: safeArea.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: safeArea.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor),
+            bottomStrip.topAnchor.constraint(equalTo: safeArea.bottomAnchor),
+            bottomStrip.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            bottomStrip.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            bottomStrip.trailingAnchor.constraint(equalTo: containerView.trailingAnchor)
+        ])
 
         createCoverView(containerView)
         createSpinnerView(containerView)
