@@ -139,6 +139,10 @@ public class AppConfig
             jsonObject["dimensions"] = mDimensions
         }
         jsonObject["telemetry"] = telemetryJson()
+        // The device's language, for a dimension's scene when neither the user's choice for
+        // it nor the user's language is known - all an app with no page of ours has (the
+        // engine's Settings::deviceLanguage).
+        jsonObject["device_language"] = Locale.preferredLanguages.first ?? ""
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: jsonObject)
             let str = String(data: jsonData, encoding: .utf8)
