@@ -29,6 +29,7 @@ extern "C" {
 #include "src/core/AnalyticsManagerInterface.h"
 #include "src/core/TelemetryInterface.h"
 #include "src/core/HttpInterface.h"
+#include "src/core/OfflineInterface.h"
 
 #include "src/core/SceneInterface.h"
 #include "src/core/SkyboxInterface.h"

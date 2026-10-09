@@ -210,7 +210,23 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         //--- enable audio/video autoplay
         config.mediaTypesRequiringUserActionForPlayback = []
         //---
-        
+
+        // App-Bound Domains: with the host app's Info.plist naming the platform's domains
+        // (WKAppBoundDomains) and the web view limited to them, WebKit exposes service
+        // workers to the page - which is what lets the page open with no network, out of
+        // the copy its worker keeps (web-site services/ServiceWorker.ts). Only while the
+        // page's host is one of those domains: a development build loads the page from a
+        // desk's address, which no domain names, and a limited web view refuses to go there.
+        // The limit holds for the child web views too (window.open), which is why the sign-in
+        // hosts the popup flow visits are in the list beside the platform's.
+        let webAppHost = WebViewCtrl.webAppHostName()
+        if WebViewCtrl.appBoundDomainsCover(host: webAppHost) {
+            config.limitsNavigationsToAppBoundDomains = true
+            Logger.info("WebViewCtrl: the web view is limited to the app-bound domains (service workers on)")
+        } else {
+            Logger.info("WebViewCtrl: the web view is not limited to app-bound domains - [\(webAppHost)] is not one of them, or the app names none")
+        }
+
         webView = WKWebView(frame: containerView.bounds, configuration: config)
         webView.uiDelegate = self
         webView.navigationDelegate = self
@@ -289,8 +305,16 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        let params = message.body as! [String: AnyObject]
-        let cmd = params["command"] as! String
+        // The page's own main frame, and nothing else: the handler is reachable from every frame -
+        // a dimension's app is someone else's code in one - and from the windows the page opens.
+        guard message.frameInfo.isMainFrame, WebViewCtrl.isAppOrigin(message.frameInfo.securityOrigin.host) else {
+            Logger.warn("WebViewCtrl: a bridge message from [\(message.frameInfo.securityOrigin.host)] refused - not the page's main frame")
+            return
+        }
+        guard let params = message.body as? [String: AnyObject], let cmd = params["command"] as? String else {
+            Logger.warn("WebViewCtrl: a bridge message that is no command refused")
+            return
+        }
         if (cmd == "SHOW_AR") {
             Context.inst().showARScreen(params["url"] as! String, params["settings"] as! String, params["account"] as! String)
             return
@@ -341,6 +365,15 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "REQUEST_PERMISSIONS") {
             Context.inst().permissions().request(feature: params["feature"] as? String ?? "")
             return
+        } else if (cmd == "SAVE_DIMENSION_OFFLINE") {
+            Offline_saveDimension(params["dimension"] as? String ?? "")
+            return
+        } else if (cmd == "REMOVE_DIMENSION_OFFLINE") {
+            Offline_removeDimension(params["dimension"] as? String ?? "", params["env"] as? String ?? "")
+            return
+        } else if (cmd == "REQUEST_OFFLINE_DIMENSIONS") {
+            Offline_requestDimensions()
+            return
         } else if (cmd == "SET_DIAGNOSTICS") {
             // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
             let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0
@@ -351,7 +384,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             liftCover("ready, says")
             return
         }
-        fatalError("Unknown web command: [" + cmd + "]")
+        // A command this build does not know - a page newer than the app sends one it has
+        // learnt since - is not the app's to die on.
+        Logger.error("Unknown web command: [" + cmd + "]")
     }
 
     // MARK: - Telemetry
@@ -388,11 +423,26 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
 
     /// The engine's policy changed (a push from the platform, or the holder's switch): the page hears it at once.
     func notifyTelemetryPolicy(_ policyJson: String) {
+        tellPage("onTelemetryPolicy", policyJson)
+    }
+
+    /// A dimension being saved for offline use (the engine's OFFLINE_PROGRESS): the page shows it.
+    func notifyOfflineProgress(_ json: String) {
+        tellPage("onOfflineProgress", json)
+    }
+
+    /// The dimensions the engine keeps for offline use (OFFLINE_DIMENSIONS): the page keeps the list.
+    func notifyOfflineDimensions(_ json: String) {
+        tellPage("onOfflineDimensions", json)
+    }
+
+    /// Calls a method of the page's bridge with one JSON argument, when the page has one.
+    private func tellPage(_ method: String, _ json: String) {
         guard webView != nil else { return }
-        let jscode = "if (window.DimxInterface && window.DimxInterface.onTelemetryPolicy) { window.DimxInterface.onTelemetryPolicy(" + WebViewCtrl.jsStringLiteral(policyJson) + ") }"
+        let jscode = "if (window.DimxInterface && window.DimxInterface.\(method)) { window.DimxInterface.\(method)(" + WebViewCtrl.jsStringLiteral(json) + ") }"
         webView.evaluateJavaScript(jscode) { (_, error) in
             if error != nil {
-                Logger.error("JS CALL ERROR (onTelemetryPolicy): \(String(describing: error))")
+                Logger.error("JS CALL ERROR (\(method)): \(String(describing: error))")
             }
         }
     }
@@ -651,7 +701,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             return
         }
 
-        if WebViewCtrl.shouldStayInWebView(host) {
+        // A web view limited to the app-bound domains cannot go anywhere else: a link to another
+        // host, even one kept in the web view otherwise, goes to the browser rather than failing.
+        if WebViewCtrl.shouldStayInWebView(host) && (!webView.configuration.limitsNavigationsToAppBoundDomains || WebViewCtrl.appBoundDomainsCover(host: host)) {
             decisionHandler(.allow)
             return
         }
@@ -676,12 +728,43 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         return host == "dimx.world" || host.hasSuffix(".dimx.world")
     }
 
+    /// Whether a frame's host is this app's page: the host web_app_host points at, and no other -
+    /// not the platform's other hosts either, since a dimension's app on the files host could put
+    /// itself in the main frame with a tap.
+    static private func isAppOrigin(_ host: String) -> Bool {
+        let lowered = host.lowercased()
+        return !lowered.isEmpty && lowered == webAppHostName()
+    }
+
     /// The host of whatever web_app_host currently points at - this app's own page by
     /// definition. Repointing that setting is already what makes another host the app,
     /// so it is the setting that is read, the way android's WebActivity reads it.
     /// Empty when the setting is not a URL with a host, and then nothing matches it.
     static private func webAppHostName() -> String {
         return URL(string: Context.inst().settings().webAppHost())?.host?.lowercased() ?? ""
+    }
+
+    /// Whether the host app's WKAppBoundDomains (Info.plist) name this host: the domain
+    /// itself, or one above it - WebKit reads every entry as a registrable domain, so
+    /// `dimx.world` covers `app.dimx.world`. An address that is no domain - a desk's IP,
+    /// localhost - is covered by nothing.
+    static func appBoundDomainsCover(host: String) -> Bool {
+        guard !host.isEmpty, let domains = Bundle.main.object(forInfoDictionaryKey: "WKAppBoundDomains") as? [String] else {
+            return false
+        }
+        let lowered = host.lowercased()
+        return domains.contains { entry in
+            let domain = entry.lowercased().trimmingCharacters(in: .whitespaces)
+            return !domain.isEmpty && (lowered == domain || lowered.hasSuffix("." + domain))
+        }
+    }
+
+    /// The device's network came or went: the page hears it (DimxInterface.onNetworkChange),
+    /// since a web view's own navigator.onLine is not always kept current; and the value is on
+    /// the window for a page whose bridge is not up yet, which reads it as it starts.
+    private func tellPageNetwork(_ online: Bool) {
+        let script = "window.DIMX_NETWORK_ONLINE = \(online); if (window.DimxInterface && window.DimxInterface.onNetworkChange) { window.DimxInterface.onNetworkChange(\(online)); }"
+        webView?.evaluateJavaScript(script) { _, _ in }
     }
 
     /// The spinner, over the cover and everything else, shown and hidden with it. It sits
@@ -1043,6 +1126,7 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         guard online != deviceOnline else { return }
         deviceOnline = online
         Logger.info("WebViewCtrl: the device is \(online ? "online" : "offline")")
+        tellPageNetwork(online)
         guard offlinePanel != nil else { return }
         if online {
             retryDelay = WebViewCtrl.retryFirstSeconds
@@ -1110,6 +1194,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
                 hostFailed = false
             }
         }
+        // The new document, before its bundle runs: what the device says of its network is
+        // on the window for the page to read as it starts.
+        tellPageNetwork(deviceOnline)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

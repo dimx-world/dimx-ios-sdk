@@ -24,6 +24,28 @@ class IOSNativeInterface
     setDiagnostics(seconds) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_DIAGNOSTICS", seconds: Number(seconds) || 0});
     }
+
+    // Whether the device has a network, as the shell last said (WebViewCtrl puts it on the
+    // window at every document and every change; changes also come through
+    // window.DimxInterface.onNetworkChange).
+    isOnline() {
+        return typeof window.DIMX_NETWORK_ONLINE === 'boolean' ? window.DIMX_NETWORK_ONLINE : true;
+    }
+
+    // Dimensions kept for offline use by the engine: everything Live View needs of one,
+    // fetched and held. The progress comes through window.DimxInterface.onOfflineProgress,
+    // the list of what is kept through window.DimxInterface.onOfflineDimensions.
+    saveDimensionOffline(dimension) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SAVE_DIMENSION_OFFLINE", dimension: String(dimension)});
+    }
+
+    removeDimensionOffline(dimension, env) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REMOVE_DIMENSION_OFFLINE", dimension: String(dimension), env: String(env || '')});
+    }
+
+    requestOfflineDimensions() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_OFFLINE_DIMENSIONS"});
+    }
     
     setWebAppHost(value) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_WEB_APP_HOST", value: value});

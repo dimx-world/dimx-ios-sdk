@@ -55,6 +55,12 @@ struct SwiftEngine
     // requests fail from here, and the SDK refuses its screens with
     // DimxError.updateRequired.
     void (*clientUpdate)(const char* updateJson);
+    // A dimension being saved for offline use, as far as it has got (res/OfflineStore),
+    // JSON {dimension, env, name, state: saving|saved|failed, done, total, failed, error};
+    // and the dimensions the engine keeps, JSON {dimensions: [{dimension, env, name,
+    // saved, files, bytes}]}, told at every change and on request. Both for the web view.
+    void (*offlineProgress)(const char* progressJson);
+    void (*offlineDimensions)(const char* listJson);
 };
 struct SwiftEngine* g_swiftEngine();
 

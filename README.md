@@ -39,6 +39,21 @@ an exact version) and link the `DimxCore` product. Then, in the app target:
    (`NSBluetoothAlwaysUsageDescription`). App Store Connect refuses a binary
    linking the SDK without them (ITMS-90683), by email.
 4. **A real device** - the engine ships device-only binaries.
+5. **`WKAppBoundDomains` in Info.plist, optionally**, for a web screen that opens
+   with no network: an array of these domains - `dimx.world`, `dimx-world.firebaseapp.com`, `dimx-world.web.app`, `microsoftonline.com`, `live.com`, `microsoft.com`, `google.com`, `apple.com`, `youtube.com` (the
+   platform's, the hosts the web screen keeps a link in, and where the page's
+   Microsoft sign-in goes; WebKit takes ten at most). With the key present WebKit
+   exposes service workers to the page, which keeps a copy of itself and starts
+   from it offline; the SDK limits its web view to those domains while the page's
+   host is one of them, and opens a link to any other host in the browser. The
+   cost is Apple's rule for the key: script injection and message handlers -
+   the SDK's bridge included - work on no page outside the list, in any web view
+   of the app, so a development build pointed at a desk's address must not carry
+   the key (the DimensionX app drops it from such a build in a script phase).
+   A Microsoft work account whose sign-in goes through its company's own
+   identity provider cannot finish inside the popup. Without the key the web
+   screen works as before and starts offline from the web view's own cache when
+   it still has the page.
 
 Initialise once the window exists: `Context.initialize(window, AppConfig())`,
 then `Context.inst().showARScreen(url, "", "", onDenied:)` and

@@ -637,6 +637,20 @@ void IOSEngine::processCommand(const std::string& command, VariantPtr arguments)
         return;
     }
 
+    // A dimension being saved for offline use, and the dimensions kept (res/OfflineStore): for the web view.
+    if (command == "OFFLINE_PROGRESS") {
+        if (g_swiftEngine()->offlineProgress) {
+            g_swiftEngine()->offlineProgress(args.toString().c_str());
+        }
+        return;
+    }
+    if (command == "OFFLINE_DIMENSIONS") {
+        if (g_swiftEngine()->offlineDimensions) {
+            g_swiftEngine()->offlineDimensions(args.toString().c_str());
+        }
+        return;
+    }
+
     if (command == "BEACONS_STOP_SCANNING") {
         if (g_swiftEngine()->beaconsStopScanning) {
             g_swiftEngine()->beaconsStopScanning();

@@ -38,6 +38,25 @@ public class Context: NSObject
      * it changes, and at once of the one that stands, if one does, when it is
      * set; nil removes it.
      */
+    /// Where the engine keeps what it fetched of the dimensions (res/ResourceCache) - the
+    /// files a dimension seen before opens from with no network, and the dimensions saved for
+    /// offline use. Under Application Support rather than Caches, which iOS purges when it is
+    /// short of room, and excluded from backups: it is this device's copy of what the
+    /// platform holds. Until 2026-10-08 the whole of Library/Caches was the engine's cache.
+    static func engineCachePath(_ libPath: String) -> String {
+        let path = libPath + "/Application Support/world.dimx/Cache"
+        var url = URL(fileURLWithPath: path)
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try url.setResourceValues(values)
+        } catch {
+            Logger.error("The engine's cache directory could not be made at [\(path)]: \(error) - nothing is kept for offline use")
+        }
+        return path
+    }
+
     public var clientUpdateHandler: ((ClientUpdate) -> Void)? {
         didSet {
             if let handler = clientUpdateHandler, let update = clientUpdate {
@@ -114,7 +133,7 @@ public class Context: NSObject
         initEngine(mSettings.appInstanceId(),
                    Bundle.module.bundlePath.appending("/data"),
                    libPath + "/LocalStorage",
-                   libPath + "/Caches",
+                   Context.engineCachePath(libPath),
                    "ExtMedia",
                    mAppConfig.toJsonString(),
                    Int(screenSize.width),
@@ -237,6 +256,15 @@ public class Context: NSObject
         g_swiftEngine().pointee.clientUpdate = { (json: UnsafePointer<CChar>!) -> Void in
             let update = ClientUpdate(json: String(cString: json))
             DispatchQueue.main.async { Context.inst().clientUpdateReceived(update) }
+        }
+        // Dimensions kept for offline use, for the page: the progress of a save, and the list.
+        g_swiftEngine().pointee.offlineProgress = { (json: UnsafePointer<CChar>!) -> Void in
+            let progress = String(cString: json)
+            DispatchQueue.main.async { Context.inst().webViewCtrl()?.notifyOfflineProgress(progress) }
+        }
+        g_swiftEngine().pointee.offlineDimensions = { (json: UnsafePointer<CChar>!) -> Void in
+            let list = String(cString: json)
+            DispatchQueue.main.async { Context.inst().webViewCtrl()?.notifyOfflineDimensions(list) }
         }
         Texture.initCallbacks()
         Material.initCallbacks()
