@@ -223,8 +223,13 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         if WebViewCtrl.appBoundDomainsCover(host: webAppHost) {
             config.limitsNavigationsToAppBoundDomains = true
             Logger.info("WebViewCtrl: the web view is limited to the app-bound domains (service workers on)")
+        } else if WebViewCtrl.appBoundDomainsNamed() {
+            // The key alone puts every web view of the app outside the app-bound domains, where
+            // the bridge is a restricted API: WebKit then refuses each load of the page (WKError
+            // 13, "navigate after using restricted APIs") and the offline screen stands for good.
+            Logger.error("WebViewCtrl: the app's Info.plist names App-Bound Domains (WKAppBoundDomains) and none of them covers [\(webAppHost)], the page's host - WebKit will refuse to load the page. Add the host's domain to the list, or take the key out of this build")
         } else {
-            Logger.info("WebViewCtrl: the web view is not limited to app-bound domains - [\(webAppHost)] is not one of them, or the app names none")
+            Logger.info("WebViewCtrl: the web view is not limited to app-bound domains - the app names none")
         }
 
         webView = WKWebView(frame: containerView.bounds, configuration: config)
@@ -319,7 +324,15 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             Context.inst().showARScreen(params["url"] as! String, params["settings"] as! String, params["account"] as! String)
             return
         } else if (cmd == "SET_WEB_APP_HOST") {
-            Context.inst().settings().setWebAppHost(params["value"] as! String)
+            // An app that names App-Bound Domains loads its page from those alone (loadView's
+            // note): pointed anywhere else it would show the offline screen at every start, with
+            // no page left to point it back from. A desk is a Debug build's, pointed by Cockpit.
+            let value = params["value"] as? String ?? ""
+            if WebViewCtrl.appBoundDomainsNamed() && !WebViewCtrl.appBoundDomainsCover(host: URL(string: value)?.host ?? "") {
+                Logger.error("WebViewCtrl: web_app_host [\(value)] refused - this build names App-Bound Domains (WKAppBoundDomains) and none of them covers that host, so its page could never load")
+            } else {
+                Context.inst().settings().setWebAppHost(value)
+            }
             return
         } else if (cmd == "REQUEST_TRACKING_STATUS") {
             let stringObj = String_create(UnsafeRawPointer(bitPattern: 0))
@@ -742,6 +755,11 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     /// Empty when the setting is not a URL with a host, and then nothing matches it.
     static private func webAppHostName() -> String {
         return URL(string: Context.inst().settings().webAppHost())?.host?.lowercased() ?? ""
+    }
+
+    /// Whether the host app names App-Bound Domains at all (WKAppBoundDomains in its Info.plist).
+    static func appBoundDomainsNamed() -> Bool {
+        return Bundle.main.object(forInfoDictionaryKey: "WKAppBoundDomains") != nil
     }
 
     /// Whether the host app's WKAppBoundDomains (Info.plist) name this host: the domain
