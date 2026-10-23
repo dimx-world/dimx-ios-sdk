@@ -230,7 +230,7 @@ public class Context: NSObject
         g_swiftEngine().pointee.httpRequest = { (id: UInt64, method: UnsafePointer<CChar>!, url: UnsafePointer<CChar>!, headersJson: UnsafePointer<CChar>!, body: UnsafePointer<CChar>!) -> Void in
             let urlText = String(cString: url)
             guard let parsed = URL(string: urlText) else {
-                Http_onResponse(id, 0, "", "not a url: \(urlText)")
+                Http_onResponse(id, 0, nil, 0, "not a url: \(urlText)")
                 return
             }
             var headers: [String: String] = [:]
@@ -243,9 +243,12 @@ public class Context: NSObject
             HttpClient.shared.send(request) { result in
                 switch result {
                 case .success(let response):
-                    Http_onResponse(id, Int32(response.status), String(decoding: response.body, as: UTF8.self), "")
+                    // The bytes as they came: a map's pack is binary, and as text it came apart.
+                    response.body.withUnsafeBytes { bytes in
+                        Http_onResponse(id, Int32(response.status), bytes.baseAddress, bytes.count, "")
+                    }
                 case .failure(let error):
-                    Http_onResponse(id, 0, "", error.localizedDescription)
+                    Http_onResponse(id, 0, nil, 0, error.localizedDescription)
                 }
             }
         }

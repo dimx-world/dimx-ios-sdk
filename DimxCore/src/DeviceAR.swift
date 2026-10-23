@@ -52,6 +52,13 @@ class DeviceAR: NSObject, ARSessionDelegate
 
     private var mCurrentFrame: ARFrame?
     private var anchors = [AnchorInfo?]()
+    // The frame whose capturedImage plane is locked for the engine (cameraFrame): the
+    // engine thread's alone, unlocked there at the next frame or the next preFrameUpdate.
+    // The pause - main thread - leaves it be: unlocking it there raced the engine thread's
+    // own unlock (a pixel buffer unlocked twice, the frame released once too often) and could
+    // land while the engine still read the plane. A paused session holds that one frame until
+    // frames come again.
+    private var mLockedFrame: ARFrame?
 
     private var mCameraMinZ: Float = 0.0
     private var mCameraMaxZ: Float = 0.0
@@ -70,8 +77,18 @@ class DeviceAR: NSObject, ARSessionDelegate
         }
         return nil
     }()
-    // Engine thread: what was last asked of the session.
-    private var mDepthRequested = false
+    // The scene depth a recording keeps (DeviceAR_captureDepthWanted): LiDAR's own, frame by
+    // frame - the fusion on the server does the averaging the smoothed depth would.
+    private static let captureDepthSupported = ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
+    // Engine thread: the depth semantics last asked of the session.
+    private var mDepthRequested: ARConfiguration.FrameSemantics = []
+    private var mOcclusionRefusalLogged = false
+    private var mCaptureDepthRefusalLogged = false
+    // Engine thread: the frame's scene depth in millimetres for a recording (cameraFrame), held
+    // until the next call, and the frame it was converted for.
+    private var mDepthMm: UnsafeMutablePointer<UInt16>?
+    private var mDepthMmCount = 0
+    private var mDepthMmTimestamp: TimeInterval = -1
     // Main thread: whether an AR screen is running the session, and whether ARKit
     // refused the depth semantics in this configuration.
     private var mSessionRunning = false
@@ -121,6 +138,90 @@ class DeviceAR: NSObject, ARSessionDelegate
         g_swiftDeviceAR().pointee.raycast = {
             (origX: Float, origY: Float, origZ: Float, dirX: Float, dirY: Float, dirZ: Float, flags: UInt, outPtr: Optional<UnsafeMutableRawPointer>) -> () in
             DeviceAR.instance.raycast(simd_float3(origX, origY, origZ), simd_float3(dirX, dirY, dirZ), flags, outPtr!)
+        }
+        g_swiftDeviceAR().pointee.cameraFrame = {
+            (outPtr: Optional<UnsafeMutablePointer<SwiftCameraFrame>>) -> Bool in
+            DeviceAR.instance.cameraFrame(outPtr!)
+        }
+    }
+
+    // Engine thread. The current frame's luminance plane, its intrinsics and the
+    // camera's own transform, for the scan tracker and the capture recorder. The
+    // pixel buffer stays locked - and the frame retained - until the next call
+    // or the next preFrameUpdate, which is as long as the engine reads it.
+    func cameraFrame(_ outPtr: UnsafeMutablePointer<SwiftCameraFrame>) -> Bool {
+        guard let frame = currentFrame() else { return false }
+        unlockHeldFrame()
+        let pixel = frame.capturedImage
+        if CVPixelBufferGetPlaneCount(pixel) < 1 {
+            return false
+        }
+        CVPixelBufferLockBaseAddress(pixel, .readOnly)
+        guard let base = CVPixelBufferGetBaseAddressOfPlane(pixel, 0) else {
+            CVPixelBufferUnlockBaseAddress(pixel, .readOnly)
+            return false
+        }
+        mLockedFrame = frame
+        outPtr.pointee.data = UnsafeRawPointer(base)
+        outPtr.pointee.width = Int32(CVPixelBufferGetWidthOfPlane(pixel, 0))
+        outPtr.pointee.height = Int32(CVPixelBufferGetHeightOfPlane(pixel, 0))
+        outPtr.pointee.rowStride = Int32(CVPixelBufferGetBytesPerRowOfPlane(pixel, 0))
+        // The intrinsics of the captured image at its own resolution; simd is
+        // column major, so the principal point sits in the third column.
+        let K = frame.camera.intrinsics
+        outPtr.pointee.fx = K[0][0]
+        outPtr.pointee.fy = K[1][1]
+        outPtr.pointee.cx = K[2][0]
+        outPtr.pointee.cy = K[2][1]
+        // The chroma plane, Cb and Cr interleaved at half the size: a recording in colour.
+        if CVPixelBufferGetPlaneCount(pixel) >= 2, let chroma = CVPixelBufferGetBaseAddressOfPlane(pixel, 1) {
+            outPtr.pointee.cbcr = UnsafeRawPointer(chroma)
+            outPtr.pointee.chromaRowStride = Int32(CVPixelBufferGetBytesPerRowOfPlane(pixel, 1))
+        } else {
+            outPtr.pointee.cbcr = nil
+            outPtr.pointee.chromaRowStride = 0
+        }
+        // The scene depth while a recording asks: it covers the captured image, so the image's
+        // intrinsics scaled to its size are its own.
+        outPtr.pointee.depth = nil
+        if DeviceAR_captureDepthWanted(), let depth = depthMillimetres(frame) {
+            let (mm, dw, dh) = depth
+            let imageWidth = Float(CVPixelBufferGetWidthOfPlane(pixel, 0))
+            let imageHeight = Float(CVPixelBufferGetHeightOfPlane(pixel, 0))
+            let sx = Float(dw) / imageWidth, sy = Float(dh) / imageHeight
+            outPtr.pointee.depth = mm
+            outPtr.pointee.depthWidth = Int32(dw)
+            outPtr.pointee.depthHeight = Int32(dh)
+            outPtr.pointee.depthRowStride = Int32(dw * 2)
+            outPtr.pointee.depthFx = K[0][0] * sx
+            outPtr.pointee.depthFy = K[1][1] * sy
+            outPtr.pointee.depthCx = K[2][0] * sx
+            outPtr.pointee.depthCy = K[2][1] * sy
+        }
+        let m = frame.camera.transform
+        withUnsafeMutablePointer(to: &outPtr.pointee.pose) { tuple in
+            tuple.withMemoryRebound(to: Float.self, capacity: 16) { p in
+                for c in 0..<4 {
+                    for r in 0..<4 {
+                        p[c * 4 + r] = m[c][r]
+                    }
+                }
+            }
+        }
+        outPtr.pointee.timestamp = frame.timestamp
+        if case .normal = frame.camera.trackingState {
+            outPtr.pointee.tracking = true
+        } else {
+            outPtr.pointee.tracking = false
+        }
+        return true
+    }
+
+    // Engine thread only (cameraFrame, preFrameUpdate).
+    private func unlockHeldFrame() {
+        if let held = mLockedFrame {
+            CVPixelBufferUnlockBaseAddress(held.capturedImage, .readOnly)
+            mLockedFrame = nil
         }
     }
 
@@ -174,6 +275,7 @@ class DeviceAR: NSObject, ARSessionDelegate
         session.pause()
         mSessionRunning = false
         DeviceAR_setCameraFeedWanted(false)
+        // The frame the engine holds is the engine thread's to unlock (mLockedFrame).
 
         mSessionLock.lock()
         mCurrentFrame = nil
@@ -208,10 +310,11 @@ class DeviceAR: NSObject, ARSessionDelegate
         // A configuration ARKit refuses with the depth semantics in it - a video
         // format they do not go with, say - runs again without them rather than
         // leaving the screen without a camera.
-        if let semantics = DeviceAR.depthSemantics, configuration.frameSemantics.contains(semantics) {
-            configuration.frameSemantics.remove(semantics)
+        let managed = DeviceAR.managedDepthSemantics
+        if !configuration.frameSemantics.intersection(managed).isEmpty {
+            configuration.frameSemantics.subtract(managed)
             mDepthRefused = true
-            Logger.warn("DeviceAR: depth occlusion off - ARKit refused the configuration with it")
+            Logger.warn("DeviceAR: depth off - ARKit refused the configuration with it")
             if mSessionRunning {
                 session.run(configuration)
             }
@@ -227,6 +330,8 @@ class DeviceAR: NSObject, ARSessionDelegate
     }
 
     func preFrameUpdate(frameContextPtr: UnsafeRawPointer) {
+        // The plane the engine read last frame is done with.
+        unlockHeldFrame()
         applyDepthSemantics()
 
         guard let frame = currentFrame() else { return }
@@ -238,38 +343,115 @@ class DeviceAR: NSObject, ARSessionDelegate
         Camera_setViewMat(&viewMat)
     }
 
+    // Every depth semantics this class puts into the configuration and takes out of it.
+    private static let managedDepthSemantics: ARConfiguration.FrameSemantics = [.sceneDepth, .smoothedSceneDepth, .personSegmentationWithDepth]
+
     // Engine thread. Puts the depth semantics into the configuration when the
-    // engine starts wanting them and takes them out when it stops; the session
+    // engine starts wanting them - the occlusion's, and the scene depth a
+    // recording keeps - and takes them out when it stops; the session
     // mutation is the main thread's, like every other.
     private func applyDepthSemantics() {
-        let wanted = DeviceAR_depthWanted()
+        var wanted: ARConfiguration.FrameSemantics = []
+        if DeviceAR_depthWanted() {
+            if let semantics = DeviceAR.depthSemantics {
+                wanted.insert(semantics)
+            } else if !mOcclusionRefusalLogged {
+                mOcclusionRefusalLogged = true
+                Logger.info("DeviceAR: depth occlusion wanted, but this device has neither LiDAR nor people segmentation")
+            }
+        }
+        if DeviceAR_captureDepthWanted() {
+            if DeviceAR.captureDepthSupported {
+                wanted.insert(.sceneDepth)
+            } else if !mCaptureDepthRefusalLogged {
+                mCaptureDepthRefusalLogged = true
+                Logger.info("DeviceAR: a recording wants depth, but this device has no LiDAR - the scan is recorded without its surface")
+            }
+        }
         if wanted == mDepthRequested {
             return
         }
         mDepthRequested = wanted
-        guard let semantics = DeviceAR.depthSemantics else {
-            if wanted {
-                Logger.info("DeviceAR: depth occlusion wanted, but this device has neither LiDAR nor people segmentation")
-            }
-            return
+        if wanted.isEmpty {
+            releaseDepthMm()
         }
 
         runSessionOnMain { [self] session, configuration in
-            if wanted && mDepthRefused {
+            var semantics = configuration.frameSemantics.subtracting(DeviceAR.managedDepthSemantics)
+            if !mDepthRefused {
+                semantics.formUnion(wanted)
+            }
+            if semantics == configuration.frameSemantics {
                 return
             }
-            if wanted {
-                configuration.frameSemantics.insert(semantics)
-            } else {
-                configuration.frameSemantics.remove(semantics)
-            }
-            Logger.info("DeviceAR: depth \(wanted ? "on" : "off") - \(semantics == .smoothedSceneDepth ? "scene depth (LiDAR)" : "people segmentation")")
+            configuration.frameSemantics = semantics
+            Logger.info("DeviceAR: depth \(wanted.isEmpty ? "off" : "on") -\(wanted.contains(.smoothedSceneDepth) ? " scene depth for the occlusion (LiDAR)" : "")\(wanted.contains(.personSegmentationWithDepth) ? " people segmentation" : "")\(wanted.contains(.sceneDepth) ? " scene depth for the recording (LiDAR)" : "")")
             // A running session takes the change now and keeps its tracking; a
             // paused one starts with it at the next screen's run.
             if mSessionRunning {
                 session.run(configuration)
             }
         }
+    }
+
+    private func releaseDepthMm() {
+        mDepthMm?.deallocate()
+        mDepthMm = nil
+        mDepthMmCount = 0
+        mDepthMmTimestamp = -1
+    }
+
+    // Engine thread. The frame's scene depth in millimetres, for a recording: LiDAR's metres
+    // where ARKit is at least medium sure of them, 0 elsewhere. Converted once a frame and
+    // held until the next call.
+    private func depthMillimetres(_ frame: ARFrame) -> (UnsafePointer<UInt16>, Int, Int)? {
+        guard let depth = frame.sceneDepth else { return nil }
+        let map = depth.depthMap
+        let width = CVPixelBufferGetWidth(map)
+        let height = CVPixelBufferGetHeight(map)
+        if width <= 0 || height <= 0 || CVPixelBufferGetPixelFormatType(map) != kCVPixelFormatType_DepthFloat32 {
+            return nil
+        }
+        if mDepthMmTimestamp == frame.timestamp, let held = mDepthMm, mDepthMmCount == width * height {
+            return (UnsafePointer(held), width, height)
+        }
+        if mDepthMmCount != width * height {
+            releaseDepthMm()
+            mDepthMm = UnsafeMutablePointer<UInt16>.allocate(capacity: width * height)
+            mDepthMmCount = width * height
+        }
+        guard let out = mDepthMm else { return nil }
+        CVPixelBufferLockBaseAddress(map, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(map, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(map) else { return nil }
+        let rowBytes = CVPixelBufferGetBytesPerRow(map)
+        var confidenceBase: UnsafeMutableRawPointer?
+        var confidenceRowBytes = 0
+        if let confidence = depth.confidenceMap, CVPixelBufferGetWidth(confidence) == width, CVPixelBufferGetHeight(confidence) == height {
+            CVPixelBufferLockBaseAddress(confidence, .readOnly)
+            confidenceBase = CVPixelBufferGetBaseAddress(confidence)
+            confidenceRowBytes = CVPixelBufferGetBytesPerRow(confidence)
+        }
+        defer {
+            if let confidence = depth.confidenceMap, confidenceBase != nil {
+                CVPixelBufferUnlockBaseAddress(confidence, .readOnly)
+            }
+        }
+        for y in 0..<height {
+            let row = (base + y * rowBytes).assumingMemoryBound(to: Float32.self)
+            let sure = confidenceBase.map { ($0 + y * confidenceRowBytes).assumingMemoryBound(to: UInt8.self) }
+            for x in 0..<width {
+                let metres = row[x]
+                let confident = sure.map { $0[x] >= UInt8(ARConfidenceLevel.medium.rawValue) } ?? true
+                if confident && metres.isFinite && metres > 0 && metres < 65.0 {
+                    out[y * width + x] = UInt16(metres * 1000)
+                } else {
+                    out[y * width + x] = 0
+                }
+            }
+        }
+        mDepthMmTimestamp = frame.timestamp
+        return (UnsafePointer(out), width, height)
     }
 
     func inFrameUpdate(frameContextPtr: UnsafeRawPointer) {

@@ -33,6 +33,28 @@ long Renderer_linesVertsCount(bool debugBuffer);
 const void* Renderer_linesVertsData(bool debugBuffer);
 long Renderer_linesPolyVertsCount(bool debugBuffer);
 const void* Renderer_linesPolyVertsData(bool debugBuffer);
+// What the debug pass holds a frame, in vertices - 0 lines, 1 polygons, 2 dots - as the render
+// config's `debug` block says (RenderLines::capacities): what DebugPass sizes its buffers by.
+long Renderer_debugCapacity(int kind);
+// The dots (RenderLines::drawDot): one vertex each, drawn as a point of Renderer_dotSize pixels.
+long Renderer_dotsCount(bool debugBuffer);
+const void* Renderer_dotsData(bool debugBuffer);
+float Renderer_dotSize(bool debugBuffer);
+// The textured quads (RenderLines::drawTexturedQuad): a quad's four corners - 12 floats, the
+// picture's top left, top right, bottom right, bottom left - its texture coordinates (uvMin.x,
+// uvMin.y, uvMax.x, uvMax.y), its opacity, whether its texture's colour is multiplied by its
+// alpha already (an SVG tile) and its texture's native id; false past the list.
+long Renderer_quadsCount(bool debugBuffer);
+bool Renderer_quad(bool debugBuffer, long index, float* corners, float* uv, float* alpha, bool* premultiplied, long* textureId);
+// The geometry held across frames (RenderLines::setSurface, addCloud): the surface - triangles,
+// three vertices each - and this frame's clouds - a point each - as their vertices (DebugVertex:
+// xyz rgba, 7 floats), their identity (DebugMeshData::id - the same id is the same vertices,
+// so the pass uploads a piece once and draws what it holds), where each stands (16 floats,
+// column-major), the opacity it is drawn at and, for a cloud, its points' size in pixels. False
+// when there is no surface, or past the clouds.
+bool Renderer_heldSurface(const void** data, long* count, long* id, float* transform, float* opacity);
+long Renderer_heldCloudsCount();
+bool Renderer_heldCloud(long index, const void** data, long* count, long* id, float* transform, float* pointPixels, float* opacity);
 void Renderer_drawPoint(bool debugBuffer, const void* posPtr, float worldSize, const void* colPtr);
 void Renderer_drawLine(bool debugBuffer, const void* pos1Ptr, const void* col1Ptr, const void* pos2Ptr, const void* col2Ptr);
 void Renderer_drawLineRect(bool debugBuffer, float width, float height, const void* transformPtr, const void* colPtr);

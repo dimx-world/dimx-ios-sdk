@@ -5,6 +5,8 @@
 #include "IOSMesh.h"
 #include "IOSRenderable.h"
 #include <render/RenderLines.h>
+#include <render/NativeTexture.h>
+#include <Texture.h>
 
 struct SwiftRenderer* g_swiftRenderer()
 {
@@ -49,6 +51,105 @@ const void* Renderer_linesPolyVertsData(bool debugBuffer)
 {
     const RenderLines& lines = debugBuffer ? g_renderer().debugLines() : g_renderer().lines();
     return lines.polygons().data();
+}
+
+long Renderer_debugCapacity(int kind)
+{
+    const DebugCapacities& c = g_renderer().lines().capacities();
+    switch (kind) {
+        case 0: return static_cast<long>(c.lines);
+        case 1: return static_cast<long>(c.polygons);
+        default: return static_cast<long>(c.dots);
+    }
+}
+
+long Renderer_dotsCount(bool debugBuffer)
+{
+    const RenderLines& lines = debugBuffer ? g_renderer().debugLines() : g_renderer().lines();
+    return static_cast<long>(lines.dots().size());
+}
+
+const void* Renderer_dotsData(bool debugBuffer)
+{
+    const RenderLines& lines = debugBuffer ? g_renderer().debugLines() : g_renderer().lines();
+    return lines.dots().data();
+}
+
+float Renderer_dotSize(bool debugBuffer)
+{
+    const RenderLines& lines = debugBuffer ? g_renderer().debugLines() : g_renderer().lines();
+    return lines.dotSize();
+}
+
+long Renderer_quadsCount(bool debugBuffer)
+{
+    const RenderLines& lines = debugBuffer ? g_renderer().debugLines() : g_renderer().lines();
+    return static_cast<long>(lines.texturedQuads().size());
+}
+
+bool Renderer_quad(bool debugBuffer, long index, float* corners, float* uv, float* alpha, bool* premultiplied, long* textureId)
+{
+    const RenderLines& lines = debugBuffer ? g_renderer().debugLines() : g_renderer().lines();
+    const std::vector<DebugQuad>& quads = lines.texturedQuads();
+    if (index < 0 || index >= static_cast<long>(quads.size())) {
+        return false;
+    }
+    const DebugQuad& q = quads[index];
+    if (!q.texture) {
+        return false;
+    }
+    for (int i = 0; i < 4; ++i) {
+        corners[i * 3 + 0] = q.corners[i].x;
+        corners[i * 3 + 1] = q.corners[i].y;
+        corners[i * 3 + 2] = q.corners[i].z;
+    }
+    uv[0] = q.uvMin.x;
+    uv[1] = q.uvMin.y;
+    uv[2] = q.uvMax.x;
+    uv[3] = q.uvMax.y;
+    *alpha = q.alpha;
+    *premultiplied = q.premultiplied;
+    *textureId = static_cast<long>(q.texture->native().id());
+    return true;
+}
+
+bool Renderer_heldSurface(const void** data, long* count, long* id, float* transform, float* opacity)
+{
+    const RenderLines& lines = g_renderer().lines();
+    const std::shared_ptr<const DebugMeshData>& surface = lines.surface();
+    if (!surface || surface->vertices.empty()) {
+        return false;
+    }
+    *data = surface->vertices.data();
+    *count = static_cast<long>(surface->vertices.size());
+    *id = static_cast<long>(surface->id);
+    memcpy(transform, &lines.surfaceTransform(), sizeof(Mat4));
+    *opacity = lines.surfaceOpacity();
+    return true;
+}
+
+long Renderer_heldCloudsCount()
+{
+    return static_cast<long>(g_renderer().lines().clouds().size());
+}
+
+bool Renderer_heldCloud(long index, const void** data, long* count, long* id, float* transform, float* pointPixels, float* opacity)
+{
+    const std::vector<HeldCloud>& clouds = g_renderer().lines().clouds();
+    if (index < 0 || index >= static_cast<long>(clouds.size())) {
+        return false;
+    }
+    const HeldCloud& cloud = clouds[index];
+    if (!cloud.data || cloud.data->vertices.empty()) {
+        return false;
+    }
+    *data = cloud.data->vertices.data();
+    *count = static_cast<long>(cloud.data->vertices.size());
+    *id = static_cast<long>(cloud.data->id);
+    memcpy(transform, &cloud.transform, sizeof(Mat4));
+    *pointPixels = cloud.pointPixels;
+    *opacity = cloud.opacity;
+    return true;
 }
 
 void Renderer_drawPoint(bool debugBuffer, const void* posPtr, float worldSize, const void* colPtr)
@@ -160,8 +261,6 @@ void IOSRenderer::deinitialize()
 void IOSRenderer::beginFrame(const FrameContext& frameContext)
 {
     Renderer::beginFrame(frameContext);
-
-    beginRenderCamera(0, frameContext); // This needs to go into core ! ! !
 
     g_swiftRenderer()->beginFrame(&frameContext);
 }

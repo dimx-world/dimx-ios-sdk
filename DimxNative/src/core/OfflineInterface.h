@@ -13,6 +13,9 @@ extern "C" {
 void Offline_saveDimension(const char* dimension);
 void Offline_removeDimension(const char* dimension, const char* env);
 void Offline_requestDimensions(void);
+// The dimension's map index and the packs around the device into the engine's cache, ahead of
+// a visit (MapTracker::prefetch) - what the page asks as a dimension's page opens.
+void Offline_prefetchMap(const char* dimension);
 
 #ifdef __cplusplus
 }

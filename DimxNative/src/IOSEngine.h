@@ -105,6 +105,8 @@ void setKeyboardTop(float top);
 void processApplink(const char* rawLink);
 void processQRCode(const char* code);
 void processGeolocationUpdate(double lat, double lng, double alt, double hacc, double vacc);
+// The compass heading of the back camera, degrees clockwise from true north, with its accuracy in degrees.
+void processHeadingUpdate(double trueHeading, double accuracy);
 void requestGeolocationUpdate();
 void refreshNearbyBeacons();
 void updateAccount(const char* accountData);

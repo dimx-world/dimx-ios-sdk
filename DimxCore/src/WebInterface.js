@@ -46,6 +46,12 @@ class IOSNativeInterface
     requestOfflineDimensions() {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_OFFLINE_DIMENSIONS"});
     }
+
+    // The dimension's map index and the packs around the device into the engine's cache,
+    // ahead of a visit - asked as a dimension's page opens, so Live View opens on what is there.
+    prefetchMap(dimension) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "PREFETCH_MAP", dimension: String(dimension)});
+    }
     
     setWebAppHost(value) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_WEB_APP_HOST", value: value});

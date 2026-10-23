@@ -387,6 +387,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "REQUEST_OFFLINE_DIMENSIONS") {
             Offline_requestDimensions()
             return
+        } else if (cmd == "PREFETCH_MAP") {
+            Offline_prefetchMap(params["dimension"] as? String ?? "")
+            return
         } else if (cmd == "SET_DIAGNOSTICS") {
             // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
             let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0

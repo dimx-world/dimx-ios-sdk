@@ -229,6 +229,14 @@ void processGeolocationUpdate(double lat, double lng, double alt, double hacc, d
     });
 }
 
+void processHeadingUpdate(double trueHeading, double accuracy)
+{
+    if (!g_engine_instance) { return; }
+    g_engine_instance->pushEvent([trueHeading, accuracy]() {
+        g_geolocation().onDeviceHeadingUpdate(trueHeading, accuracy);
+    });
+}
+
 void requestGeolocationUpdate()
 {
     if (!g_engine_instance) { return; }

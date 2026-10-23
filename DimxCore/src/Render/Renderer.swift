@@ -69,7 +69,7 @@ class Renderer
 
     // Matches CAMetalLayer's default maximumDrawableCount: three frames may be
     // in flight, and the fourth waits for the first to finish on the GPU.
-    private static let maxFramesInFlight = 3
+    static let maxFramesInFlight = 3
     private let inFlightSemaphore = DispatchSemaphore(value: Renderer.maxFramesInFlight)
 
     // Attachment formats. These used to be read off the MTKView, which was

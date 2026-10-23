@@ -31,6 +31,25 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         // at this accuracy either way, so nothing is saved by it.
         mManager.distanceFilter = kCLDistanceFilterNone
         mManager.startUpdatingLocation()
+        // The compass, where the device has one: the heading of the back camera with the
+        // phone upright (headingOrientation's portrait default), handed to the engine
+        // at every degree of change.
+        if CLLocationManager.headingAvailable() {
+            mManager.headingFilter = 1
+            mManager.startUpdatingHeading()
+        } else {
+            Logger.info("location manager: no heading available on this device")
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        // A negative accuracy is a reading CoreLocation does not vouch for; a negative true
+        // heading one it cannot correct from magnetic north (no fix yet), handed on as magnetic.
+        if newHeading.headingAccuracy < 0 {
+            return
+        }
+        let heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        processHeadingUpdate(heading, newHeading.headingAccuracy)
     }
     
     func location() -> CLLocation? {
