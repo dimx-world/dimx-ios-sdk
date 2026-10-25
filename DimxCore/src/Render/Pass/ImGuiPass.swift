@@ -13,6 +13,38 @@ class ImGuiPass
     private var imguiTextures: [UInt64: MTLTexture] = [:]
     private var nextImguiTexId: UInt64 = 1
 
+    // The geometry a context draws goes into buffers of the pass's own: a set per frame the
+    // renderer lets the GPU have in flight (Renderer.maxFramesInFlight), taken in turn, each
+    // grown to what the frame holds. Until 2026-10-25 it went into the context's mesh - made for
+    // 10,000 vertices and 10,000 indices, copied into with no bound, and rewritten while the GPU
+    // could still be reading the frame before - so a busy screen (the live editor's) wrote past
+    // its end and took the app down, a SIGBUS in the copy. A capture overlay's rendering is keyed
+    // apart from the on-screen one, so a context drawn into both in one frame takes two slots.
+    private struct GeometryKey: Hashable {
+        let context: UnsafeRawPointer
+        let capture: Bool
+    }
+    private final class GeometryRing {
+        var vertex = [MTLBuffer?](repeating: nil, count: Renderer.maxFramesInFlight)
+        var index = [MTLBuffer?](repeating: nil, count: Renderer.maxFramesInFlight)
+        var next = 0
+        var lastFrame = 0
+    }
+    private var geometry: [GeometryKey: GeometryRing] = [:]
+
+    // A ring that no context has drawn into for this many frames is let go of: its context was
+    // deleted (a screen closed, a 3D UI's entity gone), or it has not drawn since.
+    private static let idleFrames = 300
+
+    // The buffer in a slot, or a larger one when it holds less than `length` bytes - half as
+    // large again, so a screen that grows a little each frame does not reallocate each frame.
+    private static func buffer(_ current: MTLBuffer?, _ length: Int) -> MTLBuffer? {
+        if let current = current, current.length >= length {
+            return current
+        }
+        return Renderer.instance.device.makeBuffer(length: max(length + length / 2, 16 * 1024), options: [.storageModeShared])
+    }
+
     init(_ renderer: Renderer) {
         let vertDesc = MTLVertexDescriptor()
         vertDesc.attributes[0].offset = 0
@@ -132,12 +164,41 @@ class ImGuiPass
             // Create/update the ImGui-managed atlas textures referenced by this context's draw calls.
             updateTextures(context)
 
+            // The mesh gives the primitive and index types; the geometry goes into the ring's slot.
             let mesh = renderer.meshes[Mesh_nativeId(ImGuiContext_mesh(context))]!
             let vertexSize = ImGuiContext_vertexSize(context)
             let indexSize = ImGuiContext_indexSize(context)
-            
+
+            // What the frame's draw lists hold together: a draw list is copied once, at its
+            // first call, and its calls come one after another.
+            var frameVerts = 0
+            var frameInds = 0
+            var countedBufferId = -1
+            for j in 0 ..< ImGuiContext_numDrawCalls(context) {
+                let call: UnsafePointer<ImGuiDrawCall> = ImGuiContext_drawCall(context, j)
+                if call.pointee.bufferId != countedBufferId {
+                    frameVerts += call.pointee.numVertsInBuffer
+                    frameInds += call.pointee.numIndsInBuffer
+                    countedBufferId = call.pointee.bufferId
+                }
+            }
+            let key = GeometryKey(context: context, capture: capture)
+            let ring = geometry[key] ?? GeometryRing()
+            geometry[key] = ring
+            let slot = ring.next
+            ring.next = (slot + 1) % Renderer.maxFramesInFlight
+            ring.lastFrame = frameContext.frameCounter
+            ring.vertex[slot] = ImGuiPass.buffer(ring.vertex[slot], frameVerts * vertexSize)
+            ring.index[slot] = ImGuiPass.buffer(ring.index[slot], frameInds * indexSize)
+            guard let vertexBuffer = ring.vertex[slot], let indexBuffer = ring.index[slot] else {
+                if defaultEncoder == nil {
+                    encoder.endEncoding()
+                }
+                continue
+            }
+
             encoder.setCullMode(.none)
-            encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
+            encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
 
             encoder.setVertexBytes(ImGuiContext_mvpMat(context), length: 4 * 16, index: 1)
             
@@ -152,8 +213,8 @@ class ImGuiPass
                 let call: UnsafePointer<ImGuiDrawCall> = ImGuiContext_drawCall(context, j)
                 
                 if call.pointee.bufferId != currentBufferId {
-                    let vertBufPtr = mesh.vertexBuffer.contents() + totalNumVerts * vertexSize
-                    let indBufPtr = mesh.indexBuffer!.contents() + totalNumInds * indexSize
+                    let vertBufPtr = vertexBuffer.contents() + totalNumVerts * vertexSize
+                    let indBufPtr = indexBuffer.contents() + totalNumInds * indexSize
                     
                     vertBufPtr.copyMemory(from: call.pointee.vertexData,
                                           byteCount: call.pointee.numVertsInBuffer * vertexSize)
@@ -202,7 +263,7 @@ class ImGuiPass
                 encoder.drawIndexedPrimitives(type: mesh.primitiveType,
                                               indexCount: call.pointee.numIndsInCall,
                                               indexType: mesh.indexType,
-                                              indexBuffer: mesh.indexBuffer!,
+                                              indexBuffer: indexBuffer,
                                               indexBufferOffset: (callIndOffset + call.pointee.indOffsetInCall) * indexSize,
                                               instanceCount: 1,
                                               baseVertex: callVertOffset,
@@ -211,6 +272,10 @@ class ImGuiPass
             if defaultEncoder == nil {
                 encoder.endEncoding()
             }
+        }
+
+        if geometry.count > 0 && frameContext.frameCounter % ImGuiPass.idleFrames == 0 {
+            geometry = geometry.filter { frameContext.frameCounter - $0.value.lastFrame < ImGuiPass.idleFrames }
         }
     }
 }
