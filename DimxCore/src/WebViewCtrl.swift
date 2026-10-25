@@ -390,6 +390,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "PREFETCH_MAP") {
             Offline_prefetchMap(params["dimension"] as? String ?? "")
             return
+        } else if (cmd == "REQUEST_MAP_VISIT") {
+            Offline_requestMapVisit(params["dimension"] as? String ?? "")
+            return
         } else if (cmd == "SET_DIAGNOSTICS") {
             // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
             let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0
@@ -450,6 +453,11 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     /// The dimensions the engine keeps for offline use (OFFLINE_DIMENSIONS): the page keeps the list.
     func notifyOfflineDimensions(_ json: String) {
         tellPage("onOfflineDimensions", json)
+    }
+
+    /// A dimension's map visit (the engine's MAP_VISIT): the studio's map draws its tiles.
+    func notifyMapVisit(_ json: String) {
+        tellPage("onMapVisit", json)
     }
 
     /// Calls a method of the page's bridge with one JSON argument, when the page has one.

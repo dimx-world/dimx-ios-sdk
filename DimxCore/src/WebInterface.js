@@ -52,6 +52,12 @@ class IOSNativeInterface
     prefetchMap(dimension) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "PREFETCH_MAP", dimension: String(dimension)});
     }
+
+    // The dimension's map visit as the engine kept it - the tiles loaded and the ones the fixes
+    // matched in - for the studio's map; the answer comes through window.DimxInterface.onMapVisit.
+    requestMapVisit(dimension) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_MAP_VISIT", dimension: String(dimension)});
+    }
     
     setWebAppHost(value) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_WEB_APP_HOST", value: value});

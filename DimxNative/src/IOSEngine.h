@@ -61,6 +61,10 @@ struct SwiftEngine
     // saved, files, bytes}]}, told at every change and on request. Both for the web view.
     void (*offlineProgress)(const char* progressJson);
     void (*offlineDimensions)(const char* listJson);
+    // A dimension's map visit as the page asked (MapTracker::publishVisit): JSON {dimension, map,
+    // index_version, started, ended, attempts, fixes, device_tile, tiles: [{key, loaded, fixes,
+    // inliers}]}, or {dimension} alone when none was kept. For the web view.
+    void (*mapVisit)(const char* visitJson);
 };
 struct SwiftEngine* g_swiftEngine();
 

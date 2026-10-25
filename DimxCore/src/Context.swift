@@ -269,6 +269,11 @@ public class Context: NSObject
             let list = String(cString: json)
             DispatchQueue.main.async { Context.inst().webViewCtrl()?.notifyOfflineDimensions(list) }
         }
+        // A dimension's map visit, as the page asked: the studio's map draws its tiles.
+        g_swiftEngine().pointee.mapVisit = { (json: UnsafePointer<CChar>!) -> Void in
+            let visit = String(cString: json)
+            DispatchQueue.main.async { Context.inst().webViewCtrl()?.notifyMapVisit(visit) }
+        }
         Texture.initCallbacks()
         Material.initCallbacks()
         Mesh.initCallbacks()

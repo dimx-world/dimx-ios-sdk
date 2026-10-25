@@ -16,6 +16,10 @@ void Offline_requestDimensions(void);
 // The dimension's map index and the packs around the device into the engine's cache, ahead of
 // a visit (MapTracker::prefetch) - what the page asks as a dimension's page opens.
 void Offline_prefetchMap(const char* dimension);
+// The dimension's map visit - the tiles loaded and the ones the fixes matched in
+// (MapTracker::publishVisit) - for the studio's map; the answer comes through the SwiftEngine
+// callback mapVisit.
+void Offline_requestMapVisit(const char* dimension);
 
 #ifdef __cplusplus
 }

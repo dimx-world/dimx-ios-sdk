@@ -658,6 +658,13 @@ void IOSEngine::processCommand(const std::string& command, VariantPtr arguments)
         }
         return;
     }
+    // A dimension's map visit - the tiles loaded and the ones the fixes matched in: for the web view.
+    if (command == "MAP_VISIT") {
+        if (g_swiftEngine()->mapVisit) {
+            g_swiftEngine()->mapVisit(args.toString().c_str());
+        }
+        return;
+    }
 
     if (command == "BEACONS_STOP_SCANNING") {
         if (g_swiftEngine()->beaconsStopScanning) {

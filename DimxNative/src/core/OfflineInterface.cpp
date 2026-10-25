@@ -52,3 +52,17 @@ void Offline_prefetchMap(const char* dimension)
     // On the engine thread: the prefetch is the map tracker's cache, which that thread owns.
     g_engine().pushEvent([id = *dimId] { MapTracker::prefetch(id); });
 }
+
+void Offline_requestMapVisit(const char* dimension)
+{
+    if (!Engine::valid() || !dimension) {
+        return;
+    }
+    const std::optional<ObjectId> dimId = ObjectId::tryParse(dimension);
+    if (!dimId) {
+        LOGW("Offline_requestMapVisit: not a dimension id");
+        return;
+    }
+    // On the engine thread, which the trackers are; the answer comes back as MAP_VISIT.
+    g_engine().pushEvent([id = *dimId] { MapTracker::publishVisit(id); });
+}
