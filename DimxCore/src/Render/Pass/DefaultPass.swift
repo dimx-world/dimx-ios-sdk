@@ -56,6 +56,19 @@ class DefaultPass
         noDepthWriteState = Renderer.instance.device.makeDepthStencilState(descriptor: noDepthWriteDescr)!
     }
 
+    // At every frame's start (Renderer.beginFrame). Drawing empties the queues,
+    // but a frame can end without drawing - endFrame finds the layer detached or
+    // no drawable - and its meshes would otherwise stay queued until the next
+    // frame drawn, by which time a queued mesh's renderable may be gone: the
+    // meshes hold their renderable unowned, and reading it then is a trap
+    // (seen in prod as a SIGABRT in renderTransparent on the first frame after
+    // Live View was re-entered). The GL pass clears the same way.
+    func clearQueue() {
+        opaque.removeAll()
+        transparent.removeAll()
+        stencil.removeAll()
+    }
+
     func enqueue(_ renderable: Renderable) {
         if renderable.occlusion && !Settings_displayOcclusionObjects() {
             return;

@@ -265,8 +265,13 @@ class Renderer
         }
 
         frameContext.populateFromCore(ptr: frameContextPtr)
-        // Here rather than after drawing: a frame that finds no drawable draws
-        // nothing, and its casters must not be queued again on top.
+        // Here rather than after drawing: a frame that finds no layer or no
+        // drawable draws nothing (endFrame returns early), and what it queued
+        // must not stay queued under the next frame's meshes - a stale entry
+        // may name a renderable freed since (DefaultPass.clearQueue). Every
+        // pass with a queue, as GlRenderer::beginFrame clears them.
+        occlusionPass.clearQueue()
+        defaultPass.clearQueue()
         groundShadowPass.clearQueue()
     }
     

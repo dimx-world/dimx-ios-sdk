@@ -9,6 +9,12 @@ class OcclusionPass
     init(_ renderer: Renderer) {
     }
     
+    // At every frame's start (Renderer.beginFrame): a frame that ends without
+    // drawing must not leave its renderables queued - see DefaultPass.clearQueue.
+    func clearQueue() {
+        queue.removeAll()
+    }
+
     func enqueue(_ renderable: Renderable) {
         if renderable.occlusion {
             queue.append(renderable)
