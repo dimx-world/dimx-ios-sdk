@@ -23,6 +23,7 @@ public class AppConfig
     // is theirs to send. The app name is what the receiver files it under.
     private var mTelemetryEnabled: Bool = false
     private var mTelemetryApp: String = "ios-sdk"
+    private var mParkingEnabled: Bool = false
 
     public init() {}
 
@@ -102,6 +103,19 @@ public class AppConfig
 
     func telemetryEnabled() -> Bool {
         return mTelemetryEnabled
+    }
+
+    /// Turns the parking detection on (ParkingWatcher): a region round each venue the page
+    /// configures wakes the app, the end of a car trip inside it is detected and the car's place
+    /// saved and shown as a notification. The host also calls `ParkingWatcher.launch` from its app
+    /// delegate, so a relaunch for a region event finds the watcher, and declares Always location,
+    /// Motion, notifications and the location background mode.
+    public func setParkingEnabled(_ value: Bool) {
+        mParkingEnabled = value
+    }
+
+    func parkingEnabled() -> Bool {
+        return mParkingEnabled
     }
 
     /// The identity the engine reports under: this app's bundle version, the

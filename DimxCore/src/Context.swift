@@ -83,6 +83,11 @@ public class Context: NSObject
     static public func inst() -> Context {
         return sInstance
     }
+
+    /// Whether `initialize` has run: what a caller that may be reached before the host's scene connects asks first.
+    static var isInitialized: Bool {
+        return sInstance != nil
+    }
     
     override init() { super.init() }
 
@@ -108,6 +113,10 @@ public class Context: NSObject
                                                name: UIApplication.willEnterForegroundNotification, object: nil)
 
         initEngineInternal()
+
+        // The parking detection: the config is its switch, remembered for the app delegate's
+        // ParkingWatcher.launch, which a relaunch for a region event reaches and this does not.
+        ParkingWatcher.applyConfig(enabled: appConfig.parkingEnabled())
     }
 
     // The engine belongs to the app, not to a screen: it is created here, runs on

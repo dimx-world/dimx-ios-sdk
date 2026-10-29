@@ -393,6 +393,26 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "REQUEST_MAP_VISIT") {
             Offline_requestMapVisit(params["dimension"] as? String ?? "")
             return
+        } else if (cmd == "SET_PARKING_CONFIG") {
+            // A venue's parking config from the page: its fence, its beacons, the page the saved spot
+            // opens on (ParkingWatcher). The main frame alone sends here, so a dimension's app cannot.
+            let refused = ParkingWatcher.shared.configure(params["json"] as? String ?? "")
+            if !refused.isEmpty {
+                Logger.warn("WebViewCtrl: parking config refused: \(refused)")
+            }
+            return
+        } else if (cmd == "REMOVE_PARKING_CONFIG") {
+            ParkingWatcher.shared.remove(params["dimension"] as? String ?? "")
+            return
+        } else if (cmd == "REQUEST_PARKING") {
+            notifyParking(ParkingWatcher.shared.recordJson())
+            return
+        } else if (cmd == "REQUEST_PARKING_STATUS") {
+            tellPage("onParkingStatus", ParkingWatcher.shared.statusJson())
+            return
+        } else if (cmd == "CLEAR_PARKING") {
+            ParkingWatcher.shared.clearRecord("the page cleared it")
+            return
         } else if (cmd == "SET_DIAGNOSTICS") {
             // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
             let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0
@@ -458,6 +478,11 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     /// A dimension's map visit (the engine's MAP_VISIT): the studio's map draws its tiles.
     func notifyMapVisit(_ json: String) {
         tellPage("onMapVisit", json)
+    }
+
+    /// Where the car is changed (ParkingWatcher): the page hears {"record": ...}, null once it is cleared.
+    func notifyParking(_ json: String) {
+        tellPage("onParking", json)
     }
 
     /// Calls a method of the page's bridge with one JSON argument, when the page has one.
@@ -1299,12 +1324,15 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         super.viewWillDisappear(animated)
         print("WebView will disappear")
         notifyWebViewHide()
+        ParkingWatcher.shared.pageListener = nil
         UIApplication.shared.isIdleTimerDisabled = false
     }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         print("WebView will appear")
         notifyWebViewShow()
+        // Where the car is, as it changes while this screen is up (ParkingWatcher).
+        ParkingWatcher.shared.pageListener = { [weak self] json in self?.notifyParking(json) }
         UIApplication.shared.isIdleTimerDisabled = true
     }
 /*

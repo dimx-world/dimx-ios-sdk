@@ -59,6 +59,29 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_MAP_VISIT", dimension: String(dimension)});
     }
     
+    // The parking detection (ParkingWatcher): the page hands a venue's config over, and reads
+    // where the car is; the record comes through window.DimxInterface.onParking as {"record": ...},
+    // the standing of the feature through window.DimxInterface.onParkingStatus.
+    setParkingConfig(json) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_PARKING_CONFIG", json: String(json)});
+    }
+
+    removeParkingConfig(dimension) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REMOVE_PARKING_CONFIG", dimension: String(dimension)});
+    }
+
+    requestParking() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_PARKING"});
+    }
+
+    requestParkingStatus() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_PARKING_STATUS"});
+    }
+
+    clearParking() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "CLEAR_PARKING"});
+    }
+
     setWebAppHost(value) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_WEB_APP_HOST", value: value});
     }

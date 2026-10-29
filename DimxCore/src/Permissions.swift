@@ -112,6 +112,14 @@ public final class PermissionsManager {
     /// otherwise do nothing visible. Unknown names are ignored, so a newer
     /// page against an older build loses nothing.
     public func request(feature: String) {
+        if feature == "parking" {
+            // The parking detection's opt-in: Always location, Motion, notifications - asked in that
+            // order by the watcher, which registers its regions with whatever is granted.
+            ParkingWatcher.shared.requestPermissions {
+                Logger.info("Permissions: parking asked for; status \(ParkingWatcher.shared.statusJson())")
+            }
+            return
+        }
         guard feature == "map" else {
             Logger.warn("Permissions: no permissions behind [\(feature)]")
             return
