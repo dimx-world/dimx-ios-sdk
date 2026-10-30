@@ -258,6 +258,11 @@ void IOSRenderer::deinitialize()
     Renderer::deinitialize();
 }
 
+bool IOSRenderer::acquireDrawable()
+{
+    return g_swiftRenderer()->acquireDrawable && g_swiftRenderer()->acquireDrawable();
+}
+
 void IOSRenderer::beginFrame(const FrameContext& frameContext)
 {
     Renderer::beginFrame(frameContext);

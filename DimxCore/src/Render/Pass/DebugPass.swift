@@ -399,10 +399,9 @@ class DebugPass
     }
 
     func drawPoint(_ pos: simd_float3, _ size: Float,_ color: simd_float4) {
-        if DeviceAR.instance.currentFrame() == nil {
+        guard let camMat = DeviceAR.instance.frameInUse()?.camera.transform else {
             return
         }
-        let camMat = DeviceAR.instance.currentFrame()!.camera.transform
         let s2 = size * 0.5
 
         let vert = {(x: Float, y: Float) -> simd_float3 in

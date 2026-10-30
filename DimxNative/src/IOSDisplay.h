@@ -24,6 +24,7 @@ public:
     void initialize(const Variant& config) override;
     void deinitialize() override;
     void update(const FrameContext& frameContext) override;
+    void beginFrame(const FrameContext& frameContext) override;
     void endFrame(const FrameContext& frameContext) override;
 };
 #endif // __cplusplus

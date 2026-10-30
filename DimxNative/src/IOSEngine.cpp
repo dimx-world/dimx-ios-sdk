@@ -411,9 +411,11 @@ void IOSEngine::engineThreadFunc()
 
         // Asked, not assumed. Only a presented drawable paces the loop to the
         // display refresh (CAMetalLayer blocks in nextDrawable once the pool is
-        // empty); a frame the renderer dropped for want of a layer or a drawable
-        // blocks on nothing, and treating it as presented would spin this thread
-        // flat out. Everything that did not present has to pace itself below.
+        // empty - at the top of the frame, in IOSDisplay::beginFrame, ahead of
+        // the ARKit read); a frame the renderer dropped for want of a layer or a
+        // drawable blocks on nothing, and treating it as presented would spin
+        // this thread flat out. Everything that did not present has to pace
+        // itself below.
         auto& iosRenderer = static_cast<IOSRenderer&>(renderer());
         iosRenderer.clearFramePresented();
 

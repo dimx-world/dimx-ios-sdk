@@ -85,7 +85,9 @@ class BackgroundPass
             textureCbCr = nil
         }
 
-        let currentFrame = DeviceAR.instance.currentFrame()
+        // The frame the pose was set from at the top of this engine frame - never a
+        // newer one, or the content would be drawn a camera frame behind the image.
+        let currentFrame = DeviceAR.instance.frameInUse()
 
         if currentFrame != nil {
             let pixelBuffer = currentFrame!.capturedImage

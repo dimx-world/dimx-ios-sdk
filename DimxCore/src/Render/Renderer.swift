@@ -71,6 +71,9 @@ class Renderer
     // in flight, and the fourth waits for the first to finish on the GPU.
     static let maxFramesInFlight = 3
     private let inFlightSemaphore = DispatchSemaphore(value: Renderer.maxFramesInFlight)
+    // The drawable the frame under way draws into, from acquireDrawable to endFrame.
+    // Engine thread only.
+    private var pendingDrawable: CAMetalDrawable?
 
     // Attachment formats. These used to be read off the MTKView, which was
     // always a little wrong: pipeline states are cached for the renderer's
@@ -150,6 +153,7 @@ class Renderer
     static func initCallbacks() {
         g_swiftRenderer().pointee.initialize = { (configPtr: Optional<UnsafeRawPointer>) -> () in Renderer.instance.initialize(configPtr!) }
         g_swiftRenderer().pointee.postInit = { (configPtr: Optional<UnsafeRawPointer>) -> () in Renderer.instance.postInit(configPtr!) }
+        g_swiftRenderer().pointee.acquireDrawable = { () -> Bool in return Renderer.instance.acquireDrawable() }
         g_swiftRenderer().pointee.beginFrame = { (contextPtr: Optional<UnsafeRawPointer>) -> () in Renderer.instance.beginFrame(contextPtr!) }
         g_swiftRenderer().pointee.endFrame = { () -> Bool in return Renderer.instance.endFrame() }
         g_swiftRenderer().pointee.getFrameImageData = { (width: Int, height: Int, outPtr: Optional<UnsafeMutableRawPointer>) -> () in Renderer.instance.getFrameImageData(width, height, outPtr!) }
@@ -289,15 +293,33 @@ class Renderer
         depthStencilTexture = device.makeTexture(descriptor: stencilTexDescr)!
     }
 
-    // Returns whether the frame reached the screen. The engine loop paces itself
-    // on that, so a dropped frame has to be reported as one.
-    func endFrame() -> Bool {
-        for scene in scenes {
-            if (scene != nil) {
-                scene!.onFrameUpdate()
-            }
+    // Engine thread, at the top of a frame (IOSDisplay::beginFrame), before the
+    // ARKit frame is read: blocks until the layer has a drawable for this frame.
+    // The wait on the display is the one thing pacing the loop, and it used to
+    // come at the end of the frame, in endFrame - between DeviceAR's pose read at
+    // the frame's top and the background pass's image read at its end, which put
+    // the two on different ARKit frames nearly every frame (the content trailed
+    // the camera feed by a camera frame). Ahead of the read, the frame drawn is
+    // the newest the screen can show, read once. False when there is no layer or
+    // no drawable; the frame then draws nothing and the loop paces itself.
+    func acquireDrawable() -> Bool {
+        if pendingDrawable == nil {
+            pendingDrawable = waitForDrawable()
         }
+        return pendingDrawable != nil
+    }
 
+    // The drawable this frame draws into: the one acquireDrawable took at the top
+    // of the frame, else one taken now - a layer attached since the frame began.
+    private func takeDrawable() -> CAMetalDrawable? {
+        if let drawable = pendingDrawable {
+            pendingDrawable = nil
+            return drawable
+        }
+        return waitForDrawable()
+    }
+
+    private func waitForDrawable() -> CAMetalDrawable? {
         // Only ever called from the live path, so there is normally a layer
         // here. A nil one still has to be survivable: the AR screen can be taken
         // away between the engine deciding it is live and this frame reaching
@@ -306,7 +328,7 @@ class Renderer
         let layer = metalLayer
         layerLock.unlock()
 
-        guard let layer = layer else { return false }
+        guard let layer = layer else { return nil }
 
         // Cap how far the CPU may run ahead of the GPU. nextDrawable() gives
         // some backpressure on its own, but only on drawable availability - it
@@ -318,8 +340,21 @@ class Renderer
         guard let drawable = layer.nextDrawable() else {
             inFlightSemaphore.signal()
             Logger.warn("Renderer: no drawable available, frame dropped")
-            return false
+            return nil
         }
+        return drawable
+    }
+
+    // Returns whether the frame reached the screen. The engine loop paces itself
+    // on that, so a dropped frame has to be reported as one.
+    func endFrame() -> Bool {
+        for scene in scenes {
+            if (scene != nil) {
+                scene!.onFrameUpdate()
+            }
+        }
+
+        guard let drawable = takeDrawable() else { return false }
 
         updateDepthStencilTexture(CGSize(width: drawable.texture.width, height: drawable.texture.height))
 
@@ -409,8 +444,8 @@ class Renderer
         commandBuffer.commit()
 
         // Presenting is what paces the engine loop: once the layer's drawable
-        // pool is empty, nextDrawable() above blocks until the display has
-        // finished with one. Also what waitForGpuIdle() waits on.
+        // pool is empty, the next frame's acquireDrawable blocks until the
+        // display has finished with one. Also what waitForGpuIdle() waits on.
         layerLock.lock()
         lastDrawable = drawable
         lastCommandBuffer = commandBuffer
@@ -490,7 +525,8 @@ class Renderer
         depthOcclusion.matte = fullMatteTexture
 
         // Off at once when the setting goes off, before ARKit's frames stop carrying depth.
-        guard DeviceAR_depthWanted(), let frame = DeviceAR.instance.currentFrame() else {
+        // The frame in use: the depth of the frame the content is posed by.
+        guard DeviceAR_depthWanted(), let frame = DeviceAR.instance.frameInUse() else {
             logDepthSource("none")
             return
         }

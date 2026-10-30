@@ -10,6 +10,12 @@ struct SwiftRenderer
 {
     void (*initialize)(const void*);
     void (*postInit)(const void*);
+    // Blocks until the layer has a drawable for the frame about to begin, and
+    // says whether it has one. Called from IOSDisplay::beginFrame - the first
+    // thing in a frame, ahead of DeviceAR's ARKit read - so the wait that paces
+    // the loop never sits between the frame's pose read and its image read
+    // (Renderer.acquireDrawable).
+    bool (*acquireDrawable)();
     void (*beginFrame)(const void*);
     // Returns whether the frame actually reached the screen. A frame with no
     // layer or no drawable is dropped, and the update loop must not mistake one
@@ -85,6 +91,9 @@ public:
     
     void beginFrame(const FrameContext& frameContext) override;
     void endFrame(const FrameContext& frameContext) override;
+    // The display's wait for this frame's drawable (IOSDisplay::beginFrame); false
+    // when the frame has nothing to draw into.
+    bool acquireDrawable();
 
     void getFrameImageData(int width, int height, Buffer& outBuffer) override;
 

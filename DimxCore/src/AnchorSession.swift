@@ -120,7 +120,7 @@ class AnchorSession {
     }
 
     func update() {
-        guard let frame = DeviceAR.instance.currentFrame() else { return }
+        guard let frame = DeviceAR.instance.frameInUse() else { return }
         do {
             try gSession?.update(frame)
         } catch {
@@ -244,7 +244,7 @@ class AnchorSession {
     }
 
     func featureMapQuality() -> Int {
-        guard let transform = DeviceAR.instance.currentFrame()?.camera.transform else {
+        guard let transform = DeviceAR.instance.frameInUse()?.camera.transform else {
             return Int(FEATURE_MAP_QUALITY_NONE)
         }
         do {

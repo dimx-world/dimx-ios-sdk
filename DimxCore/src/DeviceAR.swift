@@ -51,6 +51,15 @@ class DeviceAR: NSObject, ARSessionDelegate
     private var mFirstFrameReported = false
 
     private var mCurrentFrame: ARFrame?
+    // The ARKit frame this engine frame is built on: taken off mCurrentFrame once, in
+    // preFrameUpdate, and what every reader on the engine thread uses until the next -
+    // the camera pose, the background image, the depth, the recorders' image, the
+    // debug drawing. Reading mCurrentFrame twice in a frame gave the content one
+    // frame's pose and the background the next frame's image whenever ARKit
+    // delivered in between - which, with the renderer's drawable wait sitting
+    // between the two reads, was nearly every frame: the content trailed the camera
+    // feed by a camera frame (2026-10-30). Engine thread only.
+    private var mFrameInUse: ARFrame?
     private var anchors = [AnchorInfo?]()
     // The frame whose capturedImage plane is locked for the engine (cameraFrame): the
     // engine thread's alone, unlocked there at the next frame or the next preFrameUpdate.
@@ -145,23 +154,28 @@ class DeviceAR: NSObject, ARSessionDelegate
         }
     }
 
-    // Engine thread. The current frame's luminance plane, its intrinsics and the
-    // camera's own transform, for the scan tracker and the capture recorder. The
-    // pixel buffer stays locked - and the frame retained - until the next call
-    // or the next preFrameUpdate, which is as long as the engine reads it.
+    // Engine thread. The frame in use's luminance plane, its intrinsics and the
+    // camera's own transform, for the scan tracker and the capture recorder - the
+    // image the frame is drawn with, posed as its content is. The pixel buffer
+    // stays locked - and the frame retained - until a preFrameUpdate takes another
+    // frame, which is as long as the engine reads it.
     func cameraFrame(_ outPtr: UnsafeMutablePointer<SwiftCameraFrame>) -> Bool {
-        guard let frame = currentFrame() else { return false }
-        unlockHeldFrame()
+        guard let frame = mFrameInUse else { return false }
         let pixel = frame.capturedImage
         if CVPixelBufferGetPlaneCount(pixel) < 1 {
             return false
         }
-        CVPixelBufferLockBaseAddress(pixel, .readOnly)
+        // Locked once per frame: a second reader in the same engine frame - the
+        // recorder after the tracker - finds the plane locked and reads the same bytes.
+        if mLockedFrame !== frame {
+            unlockHeldFrame()
+            CVPixelBufferLockBaseAddress(pixel, .readOnly)
+            mLockedFrame = frame
+        }
         guard let base = CVPixelBufferGetBaseAddressOfPlane(pixel, 0) else {
-            CVPixelBufferUnlockBaseAddress(pixel, .readOnly)
+            unlockHeldFrame()
             return false
         }
-        mLockedFrame = frame
         outPtr.pointee.data = UnsafeRawPointer(base)
         outPtr.pointee.width = Int32(CVPixelBufferGetWidthOfPlane(pixel, 0))
         outPtr.pointee.height = Int32(CVPixelBufferGetHeightOfPlane(pixel, 0))
@@ -330,11 +344,20 @@ class DeviceAR: NSObject, ARSessionDelegate
     }
 
     func preFrameUpdate(frameContextPtr: UnsafeRawPointer) {
-        // The plane the engine read last frame is done with.
-        unlockHeldFrame()
         applyDepthSemantics()
 
-        guard let frame = currentFrame() else { return }
+        // The one ARKit read of the engine frame. The display has a drawable for the
+        // frame by now (IOSDisplay::beginFrame waits for it ahead of this), so the
+        // newest frame here is the newest the screen can show, and the pose set below
+        // and the image the background pass draws at the end of the frame are the
+        // same frame's.
+        let frame = currentFrame()
+        if frame !== mFrameInUse {
+            // The plane the engine read off the last frame is done with.
+            unlockHeldFrame()
+            mFrameInUse = frame
+        }
+        guard let frame = frame else { return }
 
         let orientation = Context.inst().getInterfaceOrientation()
         var projMat = frame.camera.projectionMatrix(for: orientation, viewportSize: Renderer.instance.viewportSize, zNear: CGFloat(mCameraMinZ), zFar: CGFloat(mCameraMaxZ))
@@ -455,7 +478,7 @@ class DeviceAR: NSObject, ARSessionDelegate
     }
 
     func inFrameUpdate(frameContextPtr: UnsafeRawPointer) {
-        guard let frame = currentFrame() else {
+        guard let frame = mFrameInUse else {
             return
         }
         if Settings_displayDebugLines() {
@@ -494,13 +517,22 @@ class DeviceAR: NSObject, ARSessionDelegate
         AnchorSession.instance.update()
     }
 
-    // A snapshot: ARKit replaces the frame on its delegate queue while the engine
-    // thread is using one, and ARFrame holds the pixel buffer the background pass
-    // is about to sample.
-    func currentFrame() -> ARFrame? {
+    // The newest frame ARKit has delivered - a snapshot, since ARKit replaces it on
+    // its delegate queue. preFrameUpdate is its one reader on the engine thread;
+    // everything else there reads frameInUse(), so that an engine frame is one
+    // ARKit frame.
+    private func currentFrame() -> ARFrame? {
         mSessionLock.lock()
         defer { mSessionLock.unlock() }
         return mCurrentFrame
+    }
+
+    // The ARKit frame this engine frame is built on, from preFrameUpdate to the
+    // next; nil while the session delivers none. Engine thread only - the
+    // background pass, the depth occlusion, the debug drawing and the anchor
+    // session read it there.
+    func frameInUse() -> ARFrame? {
+        return mFrameInUse
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
