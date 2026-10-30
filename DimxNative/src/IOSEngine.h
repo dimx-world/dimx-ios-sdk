@@ -113,6 +113,9 @@ void processGeolocationUpdate(double lat, double lng, double alt, double hacc, d
 void processHeadingUpdate(double trueHeading, double accuracy);
 void requestGeolocationUpdate();
 void refreshNearbyBeacons();
+// The page opened the dimension: its beacons are listened for for the next hour, GPS or no GPS
+// (BeaconManager::watchDimension).
+void watchDimensionBeacons(const char* dimension);
 void updateAccount(const char* accountData);
 void requestBeaconStatuses(const char* uuid);
 void processBeaconObservation(const char* uuid, int major, int minor, int rssi, int measuredPower);

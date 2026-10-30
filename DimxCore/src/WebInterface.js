@@ -53,6 +53,12 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "PREFETCH_MAP", dimension: String(dimension)});
     }
 
+    // The page opened the dimension: the engine listens for its beacons for the next hour
+    // whatever the GPS says - a fix kilometres out inside a mall never names the mall.
+    watchDimensionBeacons(dimension) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "WATCH_DIMENSION_BEACONS", dimension: String(dimension)});
+    }
+
     // The dimension's map visit as the engine kept it - the tiles loaded and the ones the fixes
     // matched in - for the studio's map; the answer comes through window.DimxInterface.onMapVisit.
     requestMapVisit(dimension) {

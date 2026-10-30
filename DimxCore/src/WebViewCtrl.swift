@@ -390,6 +390,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "PREFETCH_MAP") {
             Offline_prefetchMap(params["dimension"] as? String ?? "")
             return
+        } else if (cmd == "WATCH_DIMENSION_BEACONS") {
+            watchDimensionBeacons(params["dimension"] as? String ?? "")
+            return
         } else if (cmd == "REQUEST_MAP_VISIT") {
             Offline_requestMapVisit(params["dimension"] as? String ?? "")
             return

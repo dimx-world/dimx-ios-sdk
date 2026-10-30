@@ -256,6 +256,20 @@ void refreshNearbyBeacons()
     }, ExecOpts::AfterInit);
 }
 
+void watchDimensionBeacons(const char* dimension)
+{
+    if (!g_engine_instance || !dimension) { return; }
+
+    const std::optional<ObjectId> dimId = ObjectId::tryParse(dimension);
+    if (!dimId) {
+        LOGW("watchDimensionBeacons: not a dimension id");
+        return;
+    }
+    g_engine_instance->pushEvent([id = *dimId] {
+        g_beacons().watchDimension(id);
+    }, ExecOpts::AfterInit);
+}
+
 void updateAccount(const char* accountData)
 {
     if (!g_engine_instance || !accountData) { return; }
