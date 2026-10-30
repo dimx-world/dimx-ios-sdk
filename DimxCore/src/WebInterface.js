@@ -100,10 +100,6 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "PAGE_READY"});
     }
     
-    requestTrackingStatus(dimension) {
-        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_TRACKING_STATUS", dimension: dimension});
-    }
-    
     requestGeolocationUpdate() {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_GEOLOCATION_UPDATE"});
     }

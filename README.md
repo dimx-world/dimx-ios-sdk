@@ -27,19 +27,14 @@ Add the package to the app (`https://github.com/dimx-world/dimx-ios-sdk.git`,
 an exact version) and link the `DimxCore` product. Then, in the app target:
 
 1. **iOS 16.4 or newer** as the deployment target - the SDK's floor.
-2. **`-ObjC` in Other Linker Flags.** ARCore, which the SDK depends on, ships
-   as static libraries whose Objective-C categories the linker drops unless
-   the app links with `-ObjC`. Without it the app compiles, uploads and then
-   dies at launch with an unrecognized selector such as
-   `+[GARDeviceProfile profileForIdentifier:osVersion:configurationManager:]`.
-3. **Purpose strings in Info.plist** for the camera
+2. **Purpose strings in Info.plist** for the camera
    (`NSCameraUsageDescription`), location when in use
    (`NSLocationWhenInUseUsageDescription`), the photo library
    (`NSPhotoLibraryUsageDescription`) and Bluetooth
    (`NSBluetoothAlwaysUsageDescription`). App Store Connect refuses a binary
    linking the SDK without them (ITMS-90683), by email.
-4. **A real device** - the engine ships device-only binaries.
-5. **`WKAppBoundDomains` in Info.plist, optionally**, for a web screen that opens
+3. **A real device** - the engine ships device-only binaries.
+4. **`WKAppBoundDomains` in Info.plist, optionally**, for a web screen that opens
    with no network: an array of these domains - `dimx.world`, `dimx-world.firebaseapp.com`, `dimx-world.web.app`, `microsoftonline.com`, `live.com`, `microsoft.com`, `google.com`, `apple.com`, `youtube.com` (the
    platform's, the hosts the web screen keeps a link in, and where the page's
    Microsoft sign-in goes; WebKit takes ten at most). With the key present WebKit

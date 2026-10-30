@@ -43,7 +43,6 @@ extern "C" {
 #include "src/IOSEngine.h"
 #include "src/IOSDisplay.h"
 #include "src/IOSDeviceAR.h"
-#include "src/IOSCloudAnchorSession.h"
 #include "src/IOSInput.h"
 
 #include "src/IOSLogger.h"

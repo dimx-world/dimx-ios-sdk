@@ -513,8 +513,6 @@ class DeviceAR: NSObject, ARSessionDelegate
                 }
             }
         }
-        
-        AnchorSession.instance.update()
     }
 
     // The newest frame ARKit has delivered - a snapshot, since ARKit replaces it on

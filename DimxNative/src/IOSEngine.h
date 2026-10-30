@@ -119,7 +119,6 @@ void watchDimensionBeacons(const char* dimension);
 void updateAccount(const char* accountData);
 void requestBeaconStatuses(const char* uuid);
 void processBeaconObservation(const char* uuid, int major, int minor, int rssi, int measuredPower);
-void getAnchorsTrackingStatus(const char* dimension, void* outStringObj);
 void cppConvertAppUrlToWebUrl(const char* webAppHost, const char* appUrl, void* outStringObj);
 
 #ifdef __cplusplus

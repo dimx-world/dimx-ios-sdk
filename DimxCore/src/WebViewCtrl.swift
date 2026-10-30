@@ -334,30 +334,6 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
                 Context.inst().settings().setWebAppHost(value)
             }
             return
-        } else if (cmd == "REQUEST_TRACKING_STATUS") {
-            let stringObj = String_create(UnsafeRawPointer(bitPattern: 0))
-            getAnchorsTrackingStatus(params["dimension"] as! String, stringObj)
-            let info = String(cString: String_cstr(stringObj))
-            String_delete(stringObj)
-            let jscode =
-                """
-                if (window.DimxInterface) {
-                    if (window.DimxInterface.updateTrackingStatus) {
-                        window.DimxInterface.updateTrackingStatus(JSON.parse('\(info)'))
-                    } else {
-                        console.error('FROM SWIFT: window.DimxInterface.updateTrackingStatus not defined')
-                    }
-                } else {
-                    console.error('FROM SWIFT: window.DimxInterface not defined')
-                }
-                """;
-            webView.evaluateJavaScript(jscode) {
-                (_, error) in
-                if error != nil {
-                    Logger.error("JS CALL ERROR: \(String(describing: error))")
-                }
-            }
-            return
         } else if (cmd == "REQUEST_GEOLOCATION_UPDATE") {
             requestGeolocationUpdate()
             return

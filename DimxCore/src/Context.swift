@@ -231,7 +231,6 @@ public class Context: NSObject
 
         Renderer.initCallbacks()
         DeviceAR.initCallbacks()
-        AnchorSession.initCallbacks()
         // HTTP for the engine (res/HttpClient, IOSHttpClient): the platform's client off the
         // engine thread, the answer handed back under the request's id through Http_onResponse.
         // The headers come as one JSON object. A policy change is told to the web page on the

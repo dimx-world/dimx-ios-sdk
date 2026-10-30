@@ -5,7 +5,6 @@
 #include "IOSInput.h"
 #include "render/IOSRenderer.h"
 #include "IOSDeviceAR.h"
-#include "IOSCloudAnchorSession.h"
 #include "IOSAnalyticsManager.h"
 #include "IOSHttpClient.h"
 #include "IOSVideoEncoder.h"
@@ -25,7 +24,6 @@
 #include <Clock.h>
 #include <GeolocationManager.h>
 #include <world/World.h>
-#include <world/LocationProximityManager.h>
 #include <dimensions/app/AppDimension.h>
 #include <Log.h>
 #include <Profiler.h>
@@ -99,7 +97,6 @@ void initEngine(const char* appInstanceId,
     g_crossFactory().registerTypeOverride<Renderer, IOSRenderer>(CrossType::Renderer);
     g_crossFactory().registerTypeOverride<RemoteResourceInterface, WebResourceInterface>(CrossType::RemoteResourceInterface);
     g_crossFactory().registerTypeOverride<DeviceAR, IOSDeviceAR>(CrossType::DeviceAR);
-    g_crossFactory().registerTypeOverride<NativeCloudAnchorSession, IOSCloudAnchorSession>(CrossType::NativeCloudAnchorSession);
     // Physics is not overridden here: dimx-core registers its Jolt backend
     // itself when built with it (CrossFactory.cpp); the Jolt xcframework is a
     // dependency of this target in Package.swift.
@@ -300,13 +297,6 @@ void processBeaconObservation(const char* uuid,
     g_engine_instance->pushEvent([uuid = std::string(uuid), major, minor, rssi, measuredPower]() mutable {
         g_beacons().onObservation(std::move(uuid), major, minor, rssi, measuredPower);
     });
-}
-
-void getAnchorsTrackingStatus(const char* dimension,  void* outStringObj)
-{
-    if (!g_engine_instance) { return; }
-    std::string res = g_world().proximityManager()->getAnchorsTrackingStatus(ObjectId::fromString(dimension));
-    String_assign(outStringObj, res.c_str());
 }
 
 void cppConvertAppUrlToWebUrl(const char* webAppHost, const char* appUrl, void* outStringObj)

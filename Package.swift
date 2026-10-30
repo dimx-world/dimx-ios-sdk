@@ -61,17 +61,11 @@ let package = Package(
             targets: ["DimxCore"]
         ),
     ],
-    dependencies: [
-        .package(url: "https://github.com/google-ar/arcore-ios-sdk", from: "1.54.0")
-    ],
     targets: [
         .target(
             name: "DimxCore",
             dependencies: [
                 "DimxNative",
-                .product(name: "ARCoreGARSession", package: "arcore-ios-sdk"),
-                .product(name: "ARCoreCloudAnchors", package: "arcore-ios-sdk"),
-                .product(name: "ARCoreGeospatial", package: "arcore-ios-sdk"),
             ],
             path: "DimxCore",
             resources: [
