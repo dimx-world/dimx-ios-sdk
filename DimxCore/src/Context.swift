@@ -99,20 +99,31 @@ public class Context: NSObject
 
         refreshInterfaceOrientation()
 
+        // The category now, the session when the app is in front (activateAudioSession). Activated here it was
+        // refused whenever iOS launched the app in the background - for a region the parking finder watches -
+        // since an app without the audio background mode may not take the audio there; the engine opens its
+        // own audio with the first sound, and asks again while it is refused.
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback)
-            try session.setActive(true)
+            try AVAudioSession.sharedInstance().setCategory(.playback)
         } catch {
-            Logger.error("Error setting audio session category or activating audio session: \(error)")
+            Logger.error("The audio session refuses the playback category: \(error)")
         }
 
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground),
                                                name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground),
                                                name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive),
+                                               name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(audioSessionInterrupted(_:)),
+                                               name: AVAudioSession.interruptionNotification, object: nil)
 
         initEngineInternal()
+
+        // A host that initializes the SDK with the app already in front hears no didBecomeActive until the next.
+        if UIApplication.shared.applicationState == .active {
+            activateAudioSession()
+        }
 
         // The parking detection: the config is its switch, remembered for the app delegate's
         // ParkingWatcher.launch, which a relaunch for a region event reaches and this does not.
@@ -326,6 +337,35 @@ public class Context: NSObject
 
         if mARViewCtrl != nil && mARViewCtrl.isCurrentlyVisible {
             mARViewCtrl.onScreenResume()
+        }
+    }
+
+    // Every time the app comes to the front, not once: iOS leaves an interrupted session inactive, and a
+    // call that held the audio when the app started holds it until it ends. Active already, this costs nothing.
+    @objc private func appDidBecomeActive() {
+        activateAudioSession()
+    }
+
+    @objc private func audioSessionInterrupted(_ notification: Notification) {
+        guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: raw) == .ended else {
+            return
+        }
+        // In the background the audio is not the app's to take; the return to the front takes it.
+        DispatchQueue.main.async {
+            if UIApplication.shared.applicationState == .active {
+                self.activateAudioSession()
+            }
+        }
+    }
+
+    // Main queue. A refusal is said and waited out: the engine's sounds wait for their device, which asks
+    // again by itself, and the next return to the front asks here again.
+    private func activateAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            Logger.warn("Context: the audio session does not activate - no sound until it does: \(error)")
         }
     }
 
