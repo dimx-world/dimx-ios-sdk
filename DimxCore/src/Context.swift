@@ -128,6 +128,9 @@ public class Context: NSObject
         // The parking detection: the config is its switch, remembered for the app delegate's
         // ParkingWatcher.launch, which a relaunch for a region event reaches and this does not.
         ParkingWatcher.applyConfig(enabled: appConfig.parkingEnabled())
+        // The venue tracking, the same way: its switch and who this install is, kept for the app
+        // delegate's VenueTracker.launch at a relaunch by iOS.
+        VenueTracker.applyConfig(enabled: appConfig.venueTrackingEnabled(), appInstance: mSettings.appInstanceId())
     }
 
     // The engine belongs to the app, not to a screen: it is created here, runs on

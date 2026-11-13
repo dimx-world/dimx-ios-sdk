@@ -392,6 +392,41 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "CLEAR_PARKING") {
             ParkingWatcher.shared.clearRecord("the page cleared it")
             return
+        } else if (cmd == "SET_VENUE_TRACKING_CONFIG") {
+            // A venue's tracking config from the page - its fence, its site, its beacons' UUID, how
+            // a visit is sampled (VenueTracker). The main frame alone sends here: what decides
+            // whether this phone records where it is is not a dimension app's to say.
+            let refused = VenueTracker.shared.configure(params["json"] as? String ?? "")
+            if !refused.isEmpty {
+                Logger.warn("WebViewCtrl: venue tracking config refused: \(refused)")
+            }
+            notifyVenueTracking(VenueTracker.shared.statusJson())
+            return
+        } else if (cmd == "REMOVE_VENUE_TRACKING_CONFIG") {
+            VenueTracker.shared.remove(params["dimension"] as? String ?? "")
+            notifyVenueTracking(VenueTracker.shared.statusJson())
+            return
+        } else if (cmd == "SET_VENUE_TRACKING") {
+            // The visitor's choice for one venue: {"dimension", "enabled", "auto_start", "account"}.
+            let refused = VenueTracker.shared.setEnabled(params["json"] as? String ?? "")
+            if !refused.isEmpty {
+                Logger.warn("WebViewCtrl: setVenueTracking refused: \(refused)")
+            }
+            notifyVenueTracking(VenueTracker.shared.statusJson())
+            return
+        } else if (cmd == "REQUEST_VENUE_TRACKING") {
+            notifyVenueTracking(VenueTracker.shared.statusJson())
+            return
+        } else if (cmd == "REQUEST_VENUE_SESSIONS") {
+            tellPage("onVenueSessions", VenueTracker.shared.sessionsJson())
+            return
+        } else if (cmd == "REQUEST_VENUE_SESSION") {
+            let offset = (params["offset"] as? NSNumber)?.int64Value ?? 0
+            tellPage("onVenueSession", VenueTracker.shared.sessionChunkJson(params["id"] as? String ?? "", offset: offset))
+            return
+        } else if (cmd == "REMOVE_VENUE_SESSION") {
+            VenueTracker.shared.removeSession(params["id"] as? String ?? "")
+            return
         } else if (cmd == "SET_DIAGNOSTICS") {
             // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
             let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0
@@ -462,6 +497,11 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     /// Where the car is changed (ParkingWatcher): the page hears {"record": ...}, null once it is cleared.
     func notifyParking(_ json: String) {
         tellPage("onParking", json)
+    }
+
+    /// The venue tracking's standing (VenueTracker.statusJson): on the page's request, and at every change while this screen is up.
+    func notifyVenueTracking(_ json: String) {
+        tellPage("onVenueTracking", json)
     }
 
     /// Calls a method of the page's bridge with one JSON argument, when the page has one.
@@ -1304,6 +1344,7 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         print("WebView will disappear")
         notifyWebViewHide()
         ParkingWatcher.shared.pageListener = nil
+        VenueTracker.shared.pageListener = nil
         UIApplication.shared.isIdleTimerDisabled = false
     }
     override func viewWillAppear(_ animated: Bool) {
@@ -1312,6 +1353,8 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         notifyWebViewShow()
         // Where the car is, as it changes while this screen is up (ParkingWatcher).
         ParkingWatcher.shared.pageListener = { [weak self] json in self?.notifyParking(json) }
+        // And the venue tracking's standing: a session that began, was confirmed, ended.
+        VenueTracker.shared.pageListener = { [weak self] json in self?.notifyVenueTracking(json) }
         UIApplication.shared.isIdleTimerDisabled = true
     }
 /*

@@ -24,6 +24,7 @@ public class AppConfig
     private var mTelemetryEnabled: Bool = false
     private var mTelemetryApp: String = "ios-sdk"
     private var mParkingEnabled: Bool = false
+    private var mVenueTrackingEnabled: Bool = false
 
     public init() {}
 
@@ -116,6 +117,22 @@ public class AppConfig
 
     func parkingEnabled() -> Bool {
         return mParkingEnabled
+    }
+
+    /// Turns the venue tracking on (VenueTracker): for a venue the page configures and the
+    /// visitor enables, a visit is recorded from the app being opened there until the departure
+    /// is confirmed - fixes, the venue's beacons, and what was not observed - through app switches
+    /// and the locked screen, in a background location session iOS shows on the status bar. The
+    /// host also calls `VenueTracker.launch` from its app delegate, so a relaunch by iOS finds the
+    /// tracker and a session a dead process held is taken up, and declares the location usage
+    /// strings (When In Use; Always for arrivals noticed by themselves), the `location` background
+    /// mode, and a `VenueTracking` purpose under NSLocationTemporaryUsageDescriptionDictionary.
+    public func setVenueTrackingEnabled(_ value: Bool) {
+        mVenueTrackingEnabled = value
+    }
+
+    func venueTrackingEnabled() -> Bool {
+        return mVenueTrackingEnabled
     }
 
     /// The identity the engine reports under: this app's bundle version, the

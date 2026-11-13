@@ -88,6 +88,39 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "CLEAR_PARKING"});
     }
 
+    // The venue tracking (VenueTracker): the page hands a venue's tracking config over and the
+    // visitor's choice for it ({dimension, enabled, auto_start, account}), and takes the sessions
+    // the phone recorded. The standing comes through window.DimxInterface.onVenueTracking - on
+    // request and at every change - the list of sessions through onVenueSessions, a piece of one
+    // ({id, offset, next, eof, text}) through onVenueSession. The same calls as Android's.
+    setVenueTrackingConfig(json) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_VENUE_TRACKING_CONFIG", json: String(json)});
+    }
+
+    removeVenueTrackingConfig(dimension) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REMOVE_VENUE_TRACKING_CONFIG", dimension: String(dimension)});
+    }
+
+    setVenueTracking(json) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_VENUE_TRACKING", json: String(json)});
+    }
+
+    requestVenueTracking() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_VENUE_TRACKING"});
+    }
+
+    requestVenueSessions() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_VENUE_SESSIONS"});
+    }
+
+    requestVenueSession(id, offset) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_VENUE_SESSION", id: String(id), offset: Number(offset) || 0});
+    }
+
+    removeVenueSession(id) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REMOVE_VENUE_SESSION", id: String(id)});
+    }
+
     setWebAppHost(value) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_WEB_APP_HOST", value: value});
     }

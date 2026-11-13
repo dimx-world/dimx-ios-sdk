@@ -120,6 +120,15 @@ public final class PermissionsManager {
             }
             return
         }
+        if feature == "venue_tracking" || feature == "venue_tracking_background" {
+            // The venue tracking's opt-in: the precise location while the app is in use, and - for
+            // a visitor who asked for arrivals to be noticed by themselves - the location all the
+            // time, as iOS's one-time upgrade. The tracker tells the page what the phone now allows.
+            VenueTracker.shared.requestPermissions(background: feature == "venue_tracking_background") {
+                Logger.info("Permissions: \(feature) asked for")
+            }
+            return
+        }
         guard feature == "map" else {
             Logger.warn("Permissions: no permissions behind [\(feature)]")
             return

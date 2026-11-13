@@ -38,8 +38,9 @@ public final class ParkingWatcher: NSObject, CLLocationManagerDelegate, UNUserNo
     static let recentActivity: TimeInterval = 300
     /// A GPS fix older than this is not where the car is.
     static let fixFresh: TimeInterval = 120
-    /// iOS monitors 20 regions per app and a venue takes two.
-    static let maxVenues = 9
+    /// iOS monitors 20 regions per app and a venue takes two. Twelve of them are this detection's;
+    /// the venue tracking keeps to the other eight (RegionBudget has the split).
+    static let maxVenues = 6
 
     private let manager = CLLocationManager()
     private let motion = CMMotionActivityManager()
@@ -324,6 +325,12 @@ public final class ParkingWatcher: NSObject, CLLocationManagerDelegate, UNUserNo
         }
         if others.count >= ParkingWatcher.maxVenues * 2 {
             store.log("regions of \(config.name) not registered: \(ParkingWatcher.maxVenues) venues are monitored already")
+            return
+        }
+        // And whatever else of the app holds regions - the venue tracking, the host itself.
+        let needed = config.uuid != nil ? 2 : 1
+        if RegionBudget.room(manager, replacing: [config.fenceIdentifier, config.beaconsIdentifier]) < needed {
+            store.log("regions of \(config.name) not registered: iOS monitors \(RegionBudget.limit) regions for an app, and \(manager.monitoredRegions.count) are taken")
             return
         }
         let radius = min(config.fence.radius, manager.maximumRegionMonitoringDistance)
