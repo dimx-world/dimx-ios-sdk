@@ -428,7 +428,8 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             VenueTracker.shared.removeSession(params["id"] as? String ?? "")
             return
         } else if (cmd == "SET_DIAGNOSTICS") {
-            // The holder's switch from the page's Support block: the engine goes verbose for this many seconds.
+            // The diagnostics switch of a page from before November 2026, which asked the shell: the install's one
+            // policy, asked of the platform on the engine's connection. A page since asks on its own connection.
             let seconds = (params["seconds"] as? NSNumber)?.doubleValue ?? 0
             Telemetry_setLocalPolicy(seconds)
             return
@@ -452,6 +453,14 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     /// The engine's diagnostics policy ({mode, until, server_time, set_by, revision}).
     static func telemetryPolicy() -> String {
         return nativeString { Telemetry_policyJson($0) }
+    }
+
+    /// The new document, before its bundle runs: what the engine says of this install, on the window for the
+    /// page's telemetry to read as it starts (Native.getAppInfo). WebInterface.js has read it from there since
+    /// September 2026, and until November 2026 nothing put it there, so an iPhone's page reported the user
+    /// agent's facts in its place.
+    private func tellPageAppInfo() {
+        webView?.evaluateJavaScript("window.DIMX_APP_INFO = " + WebViewCtrl.jsStringLiteral(WebViewCtrl.telemetryAppInfo()) + ";") { _, _ in }
     }
 
     private static func nativeString(_ fill: (UnsafeMutableRawPointer) -> Void) -> String {
@@ -1268,8 +1277,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             }
         }
         // The new document, before its bundle runs: what the device says of its network is
-        // on the window for the page to read as it starts.
+        // on the window for the page to read as it starts, and what the engine says of the app.
         tellPageNetwork(deviceOnline)
+        tellPageAppInfo()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

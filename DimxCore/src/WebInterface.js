@@ -20,7 +20,8 @@ class IOSNativeInterface
     getTelemetryPolicy() {
         return window.DIMX_TELEMETRY_POLICY;
     }
-    // The holder's switch: the engine goes verbose for this many seconds, 0 ends it.
+    // The diagnostics switch of a page from before November 2026: the install's policy asked of the
+    // platform on the engine's connection, verbose for this many seconds, 0 ends it.
     setDiagnostics(seconds) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "SET_DIAGNOSTICS", seconds: Number(seconds) || 0});
     }

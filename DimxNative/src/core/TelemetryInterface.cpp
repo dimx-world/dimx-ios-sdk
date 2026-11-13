@@ -35,6 +35,7 @@ void Telemetry_reportEvent(const char* name, const char* attributesJson)
 
 void Telemetry_setLocalPolicy(double seconds)
 {
-    // The policy is the engine thread's, like every event of its own.
-    g_engine().pushEvent([seconds] { g_telemetry().setLocalPolicy(seconds); });
+    // The device's switch, from a page from before the page asked the platform itself: the install's one
+    // policy, asked of the platform on the engine's connection - on the engine thread, like its every event.
+    g_engine().pushEvent([seconds] { g_telemetry().requestPolicy(seconds); });
 }
