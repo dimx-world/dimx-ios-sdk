@@ -94,7 +94,8 @@ public class Context: NSObject
     func initializeInternal(_ window: UIWindow, _ appConfig: AppConfig) {
         mAppConfig = appConfig
         mLocationManager = LocationManager()
-        mPermissions = PermissionsManager(mLocationManager)
+        mPermissions = PermissionsManager(mLocationManager,
+                                          usesNotifications: appConfig.parkingEnabled() || appConfig.venueTrackingEnabled())
         mWindow = window
 
         refreshInterfaceOrientation()

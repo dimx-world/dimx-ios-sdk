@@ -157,6 +157,25 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_PERMISSIONS", feature: feature});
     }
 
+    // The page's Permissions section: what this app may use on this phone - every permission it asks
+    // for, held or not and whether iOS would still ask, and the phone's location and Bluetooth - comes
+    // through window.DimxInterface.onPermissionsStatus, on request and at every change after.
+    requestPermissionsStatus() {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_PERMISSIONS_STATUS"});
+    }
+
+    // One permission by its id there ("location", "camera", ...), asked the way iOS asks for it;
+    // the standing comes back through onPermissionsStatus once the user has answered.
+    requestPermission(id) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "REQUEST_PERMISSION", id: String(id)});
+    }
+
+    // The app's page in the Settings app - its notification settings for "notifications" - where a
+    // permission iOS no longer asks for is turned on.
+    openSettings(target) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "OPEN_SETTINGS", target: String(target || '')});
+    }
+
     // Synchronous by contract, so it cannot go through a message handler - those are
     // one-way. The list is injected at document start alongside this script and holds the
     // providers the app is actually configured to run; the page uses its own popup for

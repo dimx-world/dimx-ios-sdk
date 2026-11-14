@@ -115,6 +115,10 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     // Web views opened by window.open, kept alive while they are on screen.
     private var childWebViewCtrls: [ChildWebViewCtrl] = []
 
+    // Whether the page shows its Permissions section - it asked for the standing - and so hears it
+    // again whenever the app becomes active or a location authorization changes.
+    private var permissionsWatched = false
+
     // The web app's footer (--dx-light-grey-color), for the strip behind the home indicator.
     private static let footerColor = UIColor(red: 0xF7 / 255.0, green: 0xF7 / 255.0, blue: 0xF8 / 255.0, alpha: 1)
 
@@ -292,6 +296,8 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(permissionsChanged), name: PermissionsManager.changedNotification, object: nil)
     }
     
     override func viewDidLoad() {
@@ -353,6 +359,21 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             return
         } else if (cmd == "REQUEST_PERMISSIONS") {
             Context.inst().permissions().request(feature: params["feature"] as? String ?? "")
+            return
+        } else if (cmd == "REQUEST_PERMISSIONS_STATUS") {
+            // The page's Permissions section: what this app may use on this phone. From here on the page
+            // hears it again at every change this screen can see (tellPermissionsStatus's callers).
+            permissionsWatched = true
+            tellPermissionsStatus()
+            return
+        } else if (cmd == "REQUEST_PERMISSION") {
+            permissionsWatched = true
+            Context.inst().permissions().request(pagePermission: params["id"] as? String ?? "") { [weak self] in
+                self?.tellPermissionsStatus()
+            }
+            return
+        } else if (cmd == "OPEN_SETTINGS") {
+            PermissionsManager.openSettings(params["target"] as? String ?? "")
             return
         } else if (cmd == "SAVE_DIMENSION_OFFLINE") {
             Offline_saveDimension(params["dimension"] as? String ?? "")
@@ -511,6 +532,27 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
     /// The venue tracking's standing (VenueTracker.statusJson): on the page's request, and at every change while this screen is up.
     func notifyVenueTracking(_ json: String) {
         tellPage("onVenueTracking", json)
+    }
+
+    /// What this app may use on this phone (PermissionsManager.pageStatus): on the page's request, after a
+    /// permission it asked for, and - once the page has asked - whenever the app becomes active again or a
+    /// location authorization changes, since a system question or the Settings app is where it changes.
+    private func tellPermissionsStatus() {
+        Context.inst().permissions().pageStatus { [weak self] json in
+            self?.tellPage("onPermissionsStatus", json)
+        }
+    }
+
+    @objc func appDidBecomeActive() {
+        if permissionsWatched && view.window != nil {
+            tellPermissionsStatus()
+        }
+    }
+
+    @objc func permissionsChanged() {
+        if permissionsWatched && view.window != nil {
+            tellPermissionsStatus()
+        }
     }
 
     /// Calls a method of the page's bridge with one JSON argument, when the page has one.

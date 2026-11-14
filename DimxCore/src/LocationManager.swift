@@ -58,6 +58,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     
     func handleAuthorizationStatus(_ status: CLAuthorizationStatus) {
         Logger.info("location manager authorization status changed: \(status.rawValue)")
+        NotificationCenter.default.post(name: PermissionsManager.changedNotification, object: nil)
         switch status {
         case .authorizedWhenInUse, .authorizedAlways:
             answerAuthCallbacks(true)
@@ -76,6 +77,16 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         for callback in callbacks {
             callback(granted)
         }
+    }
+
+    /// Location allowed without Precise Location: beacon ranging and the map's fixes get nothing exact.
+    func accuracyReduced() -> Bool {
+        return mManager.accuracyAuthorization == .reducedAccuracy
+    }
+
+    /// The upgrade to Always - or, undecided, the first question with Always to follow (iOS's own order).
+    func requestAlways() {
+        mManager.requestAlwaysAuthorization()
     }
 
     func authorizationStatus() -> CLAuthorizationStatus {
