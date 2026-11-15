@@ -379,7 +379,6 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                 "name": config.name,
                 "enabled": VenueTrackingStore.tracked(desired, state, dimension),
                 "auto_start": VenueTrackingStore.autoStart(desired, dimension),
-                "auto_start_offered": config.autoStart,
                 "beacons": config.uuid != nil,
                 "account": VenueVisit.string(venue, "account"),
                 "fence_watched": watched.contains(config.fenceIdentifier),

@@ -63,15 +63,17 @@ struct VenueSampling {
     }
 }
 
-/// The fence that says the phone may be at the venue, the site that says it is, the UUID its
-/// beacons advertise under, how a visit is sampled and how long the judge waits. The page hands
-/// it over as JSON (WebViewCtrl's SET_VENUE_TRACKING_CONFIG); only the dimension and the fence
-/// are required. android-app's VenueTrackingConfig has the JSON spelled out.
+/// The fence that says the phone may be at the venue, the site that says it is (the circle the
+/// venue's beacons cover, as the page makes it; the fence without one), the UUID its beacons
+/// advertise under, how a visit is sampled and how long the judge waits. The page hands it over
+/// as JSON (WebViewCtrl's SET_VENUE_TRACKING_CONFIG); only the dimension and the fence are
+/// required. Every venue may start a visit by itself at its fence - whether this phone does is
+/// the visitor's choice (VenueTrackingStore).
+/// android-app's VenueTrackingConfig has the JSON spelled out.
 final class VenueTrackingConfig: CustomStringConvertible {
     static let minFenceRadius = 100.0
     static let maxFenceRadius = 5000.0
     static let minSiteRadius = 20.0
-    private static let appUrlPrefix = "https://go.dimx.world/?dim="
 
     let dimension: String
     let name: String
@@ -79,9 +81,6 @@ final class VenueTrackingConfig: CustomStringConvertible {
     let site: VenueCircle
     /// Nil when the venue has no beacons: fixes alone say where the phone is.
     let uuid: UUID?
-    let appUrl: String
-    /// Whether the venue lets the phone watch for an arrival by itself; the visitor still has to ask for it.
-    let autoStart: Bool
     let sampling: VenueSampling
     let rules: VenueVisit.Rules
     /// The page's own gateway, through which a finished session is sent (VenueUpload); empty when
@@ -89,16 +88,14 @@ final class VenueTrackingConfig: CustomStringConvertible {
     /// session's header with the rest, so a session is sent to the environment it was recorded under.
     let uploadGateway: String
 
-    private init(dimension: String, name: String, fence: VenueCircle, site: VenueCircle, uuid: UUID?, appUrl: String,
-                 autoStart: Bool, sampling: VenueSampling, rules: VenueVisit.Rules, uploadGateway: String) {
+    private init(dimension: String, name: String, fence: VenueCircle, site: VenueCircle, uuid: UUID?,
+                 sampling: VenueSampling, rules: VenueVisit.Rules, uploadGateway: String) {
         self.uploadGateway = uploadGateway
         self.dimension = dimension
         self.name = name
         self.fence = fence
         self.site = site
         self.uuid = uuid
-        self.appUrl = appUrl
-        self.autoStart = autoStart
         self.sampling = sampling
         self.rules = rules
     }
@@ -140,19 +137,12 @@ final class VenueTrackingConfig: CustomStringConvertible {
             }
         }
 
-        var appUrl = VenueVisit.string(root, "app_url")
-        if appUrl.isEmpty {
-            appUrl = appUrlPrefix + dimension
-        } else if !appUrl.hasPrefix("https://") && !appUrl.hasPrefix("http://") {
-            throw VenueTrackingError.invalid("app_url must be an http(s) url")
-        }
-        let autoStart = root["auto_start"] == nil || VenueVisit.bool(root, "auto_start")
         let gateway = VenueVisit.string((root["upload"] as? [String: Any]) ?? [:], "gateway")
         if !gateway.isEmpty && !gateway.hasPrefix("https://") && !gateway.hasPrefix("http://") {
             throw VenueTrackingError.invalid("upload.gateway must be an http(s) url")
         }
-        return VenueTrackingConfig(dimension: dimension, name: name, fence: fence, site: site, uuid: uuid, appUrl: appUrl,
-                                   autoStart: autoStart, sampling: VenueSampling.from(root["sampling"] as? [String: Any]),
+        return VenueTrackingConfig(dimension: dimension, name: name, fence: fence, site: site, uuid: uuid,
+                                   sampling: VenueSampling.from(root["sampling"] as? [String: Any]),
                                    rules: VenueVisit.Rules.from(root["rules"] as? [String: Any]), uploadGateway: gateway)
     }
 
@@ -173,7 +163,7 @@ final class VenueTrackingConfig: CustomStringConvertible {
     func toJson() -> [String: Any] {
         var root: [String: Any] = [
             "dimension": dimension, "name": name, "fence": fence.toJson(), "site": site.toJson(),
-            "app_url": appUrl, "auto_start": autoStart, "sampling": sampling.toJson(), "rules": rules.toJson(),
+            "sampling": sampling.toJson(), "rules": rules.toJson(),
         ]
         if let uuid = uuid {
             root["beacons"] = ["uuid": uuid.uuidString.lowercased()]
@@ -266,10 +256,10 @@ final class VenueTrackingStore {
         return offAt < VenueVisit.number(venue, "since", 0)
     }
 
-    /// Whether the visitor asked for the venue to be watched for an arrival, and the venue allows it.
+    /// Whether the visitor asked for the venue to be watched for an arrival.
     static func autoStart(_ desired: [String: Any], _ dimension: String) -> Bool {
-        guard let venue = venue(desired, dimension), let config = config(desired, dimension) else { return false }
-        return config.autoStart && VenueVisit.bool(venue, "auto_start")
+        guard let venue = venue(desired, dimension), config(desired, dimension) != nil else { return false }
+        return VenueVisit.bool(venue, "auto_start")
     }
 
     // MARK: state

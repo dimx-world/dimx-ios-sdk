@@ -52,14 +52,14 @@ final class ParkingConfig: CustomStringConvertible {
     let appUrl: String
 
     private init(dimension: String, name: String, fence: ParkingFence, uuid: UUID?, measuredPower: Int,
-                 beacons: [ParkingBeacon], appUrl: String) {
+                 beacons: [ParkingBeacon]) {
         self.dimension = dimension
         self.name = name
         self.fence = fence
         self.uuid = uuid
         self.measuredPower = measuredPower
         self.beacons = beacons
-        self.appUrl = appUrl
+        self.appUrl = ParkingConfig.appUrlPrefix + dimension + "&route=parking"
     }
 
     /// The identifier of the circular region this config registers.
@@ -147,15 +147,8 @@ final class ParkingConfig: CustomStringConvertible {
             }
         }
 
-        var appUrl = string(root, "app_url")
-        if appUrl.isEmpty {
-            appUrl = appUrlPrefix + dimension + "&route=parking"
-        } else if !appUrl.hasPrefix("https://") && !appUrl.hasPrefix("http://") {
-            throw ParkingError.invalid("app_url must be an http(s) url")
-        }
-
         return ParkingConfig(dimension: dimension, name: name, fence: ParkingFence(lat: fenceLat, lng: fenceLng, radius: radius),
-                             uuid: uuid, measuredPower: measuredPower, beacons: beacons, appUrl: appUrl)
+                             uuid: uuid, measuredPower: measuredPower, beacons: beacons)
     }
 
     func toJson() -> [String: Any] {
@@ -163,7 +156,6 @@ final class ParkingConfig: CustomStringConvertible {
             "dimension": dimension,
             "name": name,
             "fence": ["lat": fence.lat, "lng": fence.lng, "radius": fence.radius],
-            "app_url": appUrl,
         ]
         if let uuid = uuid {
             root["beacons"] = [
