@@ -33,6 +33,9 @@ import UserNotifications
 ///    iOS goes on answering with the screen off is for a device to say (the windows marked `bg`
 ///    of a session are the answer); until it has, an answer with nothing in it counts as
 ///    "listened and heard nothing" for the judge only while the app is in front.
+/// 5. Once the judge confirmed the visit, what has been written of it goes to the backend every
+///    `upload_interval_s` while it goes on (VenueUploader.kickLive), and the rest when it is over;
+///    nothing of a session the judge never confirmed leaves the phone.
 ///
 /// What it does not do: keep the phone awake by itself, or start anything iOS did not allow.
 /// A stretch in which nothing reached it is a gap in the record, which is the truth of it.
@@ -95,6 +98,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         var advertsSinceHeartbeat = 0
         var rangesSinceHeartbeat = 0
         var batteryAtStart = -1
+        /// When what was recorded was last sent while the visit goes on; -1 for not yet in this process.
+        var lastLiveElapsed: Int64 = -1
         /// Core Location's word that the phone is not moving, which is when it stops sending fixes.
         var stationary = false
         var diagnostics = ""
@@ -1676,7 +1681,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
 
     /// Every few seconds while the process runs, and with every fix and ranging answer when it
     /// had been asleep: the judge is asked what time concludes, ranging that stopped answering is
-    /// noticed, and the heartbeat and the state go out when they are due.
+    /// noticed, the heartbeat and the state go out when they are due, and what has been written of
+    /// a confirmed visit is sent when that is due.
     private func tick() {
         guard let session = session else { return }
         let now = VenueTracker.wall()
@@ -1709,6 +1715,20 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             persist()
         }
         flush()
+        if self.session === session {
+            sendLiveIfDue(session, elapsed)
+        }
+    }
+
+    /// What has been written of a visit the judge confirmed goes to the backend while the visit
+    /// goes on, every `upload_interval_s` from the last try - after the tick's flush, so the file
+    /// holds every record so far, and with the session and its confirmation read here on the main
+    /// thread. Never before the confirmation: nothing of a phone never shown to be at the venue leaves it.
+    private func sendLiveIfDue(_ session: Session, _ elapsed: Int64) {
+        guard VenueUpload.liveDue(confirmedAt: session.judge.confirmedAt, lastTryElapsed: session.lastLiveElapsed,
+                                  elapsed: elapsed, intervalS: session.config.sampling.uploadIntervalS) else { return }
+        session.lastLiveElapsed = elapsed
+        VenueUploader.shared.kickLive(session.id)
     }
 
     /// Something reached the tracker. When nothing had for long, that stretch is written as a gap:

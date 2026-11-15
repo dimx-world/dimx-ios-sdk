@@ -32,30 +32,30 @@ struct VenueCircle: Equatable {
 
 /// How densely a visit is sampled; every value has a default and is held to a sane range.
 struct VenueSampling {
-    /// Seconds between fixes while no beacon places the phone. Android's request to its provider;
-    /// Core Location gives fixes at its own pace, and this is recorded only.
-    var fixIntervalS = 10
-    var fixIntervalIndoorS = 30
+    /// Seconds between fixes for the whole of a session. Android's request to its provider; Core
+    /// Location gives fixes at its own pace - about one a second while moving - and this is recorded only.
+    var fixIntervalS = 5
     var bleWindowS = 5
     /// Android's scan mode; iOS ranges at the rate Core Location gives.
     var bleMode = "low_latency"
+    /// Seconds between the sendings of what has been recorded of a confirmed visit while it goes on (VenueUpload.live).
+    var uploadIntervalS = 60
 
     static func from(_ json: [String: Any]?) -> VenueSampling {
         var sampling = VenueSampling()
         guard let json = json else { return sampling }
         sampling.fixIntervalS = clamp(VenueVisit.number(json, "fix_interval_s", Double(sampling.fixIntervalS)), 2, 300)
-        sampling.fixIntervalIndoorS = clamp(VenueVisit.number(json, "fix_interval_indoor_s", Double(sampling.fixIntervalIndoorS)),
-                                            sampling.fixIntervalS, 600)
         sampling.bleWindowS = clamp(VenueVisit.number(json, "ble_window_s", Double(sampling.bleWindowS)), 2, 60)
         let mode = VenueVisit.string(json, "ble_mode").lowercased()
         if ["balanced", "low_power", "low_latency"].contains(mode) {
             sampling.bleMode = mode
         }
+        sampling.uploadIntervalS = clamp(VenueVisit.number(json, "upload_interval_s", Double(sampling.uploadIntervalS)), 15, 600)
         return sampling
     }
 
     func toJson() -> [String: Any] {
-        ["fix_interval_s": fixIntervalS, "fix_interval_indoor_s": fixIntervalIndoorS, "ble_window_s": bleWindowS, "ble_mode": bleMode]
+        ["fix_interval_s": fixIntervalS, "ble_window_s": bleWindowS, "ble_mode": bleMode, "upload_interval_s": uploadIntervalS]
     }
 
     private static func clamp(_ value: Double, _ low: Int, _ high: Int) -> Int {
@@ -81,14 +81,19 @@ final class VenueTrackingConfig: CustomStringConvertible {
     let site: VenueCircle
     /// Nil when the venue has no beacons: fixes alone say where the phone is.
     let uuid: UUID?
+    /// Where the beacons stand, as the page handed it (`beacons.places`): carried as it came into
+    /// every session's header, so that the backend places what the phone heard by the layout the
+    /// visit was recorded under; nothing here reads it. Nil for none.
+    let beaconPlaces: [Any]?
     let sampling: VenueSampling
     let rules: VenueVisit.Rules
-    /// The page's own gateway, through which a finished session is sent (VenueUpload); empty when
-    /// the page named none - a visit is recorded as ever and nothing is sent. It goes into the
-    /// session's header with the rest, so a session is sent to the environment it was recorded under.
+    /// The page's own gateway, through which a session is sent (VenueUpload) - what a confirmed
+    /// visit has recorded every `upload_interval_s` while it goes on, and the rest when it is over;
+    /// empty when the page named none - a visit is recorded as ever and nothing is sent. It goes
+    /// into the session's header with the rest, so a session is sent to the environment it was recorded under.
     let uploadGateway: String
 
-    private init(dimension: String, name: String, fence: VenueCircle, site: VenueCircle, uuid: UUID?,
+    private init(dimension: String, name: String, fence: VenueCircle, site: VenueCircle, uuid: UUID?, beaconPlaces: [Any]?,
                  sampling: VenueSampling, rules: VenueVisit.Rules, uploadGateway: String) {
         self.uploadGateway = uploadGateway
         self.dimension = dimension
@@ -96,6 +101,7 @@ final class VenueTrackingConfig: CustomStringConvertible {
         self.fence = fence
         self.site = site
         self.uuid = uuid
+        self.beaconPlaces = beaconPlaces
         self.sampling = sampling
         self.rules = rules
     }
@@ -127,6 +133,7 @@ final class VenueTrackingConfig: CustomStringConvertible {
         let site = try circle(root["site"] as? [String: Any], "site", minSiteRadius, maxFenceRadius) ?? fence
 
         var uuid: UUID?
+        var places: [Any]?
         if let beacons = root["beacons"] as? [String: Any] {
             let text = VenueVisit.string(beacons, "uuid")
             if !text.isEmpty {
@@ -135,13 +142,16 @@ final class VenueTrackingConfig: CustomStringConvertible {
                 }
                 uuid = parsed
             }
+            if uuid != nil, let placed = beacons["places"] as? [Any] {
+                places = placed
+            }
         }
 
         let gateway = VenueVisit.string((root["upload"] as? [String: Any]) ?? [:], "gateway")
         if !gateway.isEmpty && !gateway.hasPrefix("https://") && !gateway.hasPrefix("http://") {
             throw VenueTrackingError.invalid("upload.gateway must be an http(s) url")
         }
-        return VenueTrackingConfig(dimension: dimension, name: name, fence: fence, site: site, uuid: uuid,
+        return VenueTrackingConfig(dimension: dimension, name: name, fence: fence, site: site, uuid: uuid, beaconPlaces: places,
                                    sampling: VenueSampling.from(root["sampling"] as? [String: Any]),
                                    rules: VenueVisit.Rules.from(root["rules"] as? [String: Any]), uploadGateway: gateway)
     }
@@ -166,7 +176,11 @@ final class VenueTrackingConfig: CustomStringConvertible {
             "sampling": sampling.toJson(), "rules": rules.toJson(),
         ]
         if let uuid = uuid {
-            root["beacons"] = ["uuid": uuid.uuidString.lowercased()]
+            var beacons: [String: Any] = ["uuid": uuid.uuidString.lowercased()]
+            if let places = beaconPlaces {
+                beacons["places"] = places
+            }
+            root["beacons"] = beacons
         }
         if !uploadGateway.isEmpty {
             root["upload"] = ["gateway": uploadGateway]

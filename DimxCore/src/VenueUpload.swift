@@ -1,16 +1,22 @@
 import Foundation
 import UIKit
 
-/// Hands the sessions that are over to the backend: each file to the generic service the
-/// session's own gateway names, in pieces by offset (LOYALTY_UPLOAD_VISIT_SESSION, core-ts
-/// services/loyalty VisitTypes), by the tracker itself - no page, no engine. The same loop as
-/// android-app's VenueUpload, which has the reasoning spelled out.
+/// Hands the sessions to the backend: each file to the generic service the session's own gateway
+/// names, in pieces by offset (LOYALTY_UPLOAD_VISIT_SESSION, core-ts services/loyalty
+/// VisitTypes), by the tracker itself - no page, no engine. The same loop as android-app's
+/// VenueUpload, which has the reasoning spelled out.
 ///
 /// A piece is whole lines and goes at the offset the service is believed to stand at; the answer
 /// says where it stands, and the next piece goes from there - so an answer that was lost, a run
 /// iOS cut short and a service that lost what it had are all the same loop. What stands of each
 /// upload is kept between runs (`uploads.json`): how far it got, that it is whole there, or that
 /// the service refused it for good, which ends the trying.
+///
+/// Two ways a session goes: while a visit the judge confirmed goes on, what has been written of
+/// it every `upload_interval_s` (`live`) - every whole line so far, never the end, a failure
+/// tried again at the next interval and counted toward nothing; and when it is over, the rest
+/// with the last piece saying so (`run`), which is when the service makes the visit of it. Both
+/// run on VenueUploader's queue, one at a time.
 ///
 /// Who the session is of is the account in its own header, named in the request and taken at its
 /// word for now: the tracker holds nothing to sign in with (the sign-in is the page's).
@@ -23,6 +29,25 @@ protocol VenueUploadTransport {
 struct VenueUploadError: Error, CustomStringConvertible {
     let description: String
     init(_ description: String) { self.description = description }
+}
+
+/// The generic service each gateway named, kept so that a sending every minute is one request,
+/// not two; asked again only after a sending through it failed. Used on VenueUploader's queue.
+final class VenueGenerics {
+    private var byGateway: [String: String] = [:]
+
+    func of(_ transport: VenueUploadTransport, _ gateway: String, _ device: String) throws -> String {
+        if let generic = byGateway[gateway] {
+            return generic
+        }
+        let generic = try VenueUpload.locate(transport, gateway, device)
+        byGateway[gateway] = generic
+        return generic
+    }
+
+    func forget(_ gateway: String) {
+        byGateway.removeValue(forKey: gateway)
+    }
 }
 
 enum VenueUpload {
@@ -38,6 +63,24 @@ enum VenueUpload {
         var refused = 0
         var waiting = 0
         var description: String { "\(sent) sent, \(waiting) waiting, \(refused) refused" }
+    }
+
+    /// What one live sending did.
+    struct Live {
+        /// Bytes the service took this time.
+        var sent: Int64 = 0
+        /// Why the service will never take the session; nil when it may.
+        var refused: String?
+        /// Why this sending failed - to be tried again at the next interval; nil when it did not.
+        var error: String?
+    }
+
+    /// Whether what has been written of the session being recorded is due to go: only once the
+    /// judge confirmed the visit (`confirmedAt` above 0) - nothing of a phone never shown to be at
+    /// the venue leaves it - and then at once, and every `intervalS` from the last try
+    /// (`lastTryElapsed`, -1 for none yet).
+    static func liveDue(confirmedAt: Int64, lastTryElapsed: Int64, elapsed: Int64, intervalS: Int) -> Bool {
+        confirmedAt > 0 && (lastTryElapsed < 0 || elapsed - lastTryElapsed >= Int64(intervalS) * 1000)
     }
 
     /// Whether a session's upload is settled: whole at the service, refused for good, or given up on.
@@ -70,13 +113,12 @@ enum VenueUpload {
 
     /// One run over what is pending. `uploads` is changed in place - the caller writes it - and is
     /// held to the sessions the directory still has.
-    static func run(_ dir: URL, uploads: inout [String: Any], activeId: String?, transport: VenueUploadTransport, now: Int64,
-                    log: (String) -> Void) -> Outcome {
+    static func run(_ dir: URL, uploads: inout [String: Any], activeId: String?, transport: VenueUploadTransport,
+                    generics: VenueGenerics, now: Int64, log: (String) -> Void) -> Outcome {
         var outcome = Outcome()
         for id in uploads.keys where !FileManager.default.fileExists(atPath: VenueSessionFile.file(dir, id).path) {
             uploads.removeValue(forKey: id)
         }
-        var generics: [String: String] = [:]
         var unreachable = false
         for file in pending(dir, uploads, activeId: activeId) {
             let id = VenueSessionFile.idOf(file)
@@ -108,22 +150,19 @@ enum VenueUpload {
             }
             let device = VenueVisit.string(header, "app_instance")
             do {
-                var generic = generics[gateway]
-                if generic == nil {
-                    generic = try locate(transport, gateway, device)
-                    generics[gateway] = generic
-                }
+                let generic = try generics.of(transport, gateway, device)
                 if let refused = try send(file, id: id, dimension: VenueVisit.string(header, "venue"), account: account, device: device,
-                                          generic: generic!, entry: &entry, transport: transport) {
+                                          generic: generic, entry: &entry, transport: transport, end: fileLength(file), finishing: true) {
                     refuse(refused)
                 } else {
                     entry["done"] = true
                     entry["at"] = now
                     entry.removeValue(forKey: "error")
                     outcome.sent += 1
-                    log("upload: session \(id) is whole at the service - \(VenueVisit.int64(entry, "sent")) bytes through \(generic!)")
+                    log("upload: session \(id) is whole at the service - \(VenueVisit.int64(entry, "sent")) bytes through \(generic)")
                 }
             } catch {
+                generics.forget(gateway)
                 let tries = Int(VenueVisit.number(entry, "tries", 0)) + 1
                 entry["tries"] = tries
                 entry["error"] = "\(error)"
@@ -136,8 +175,68 @@ enum VenueUpload {
         return outcome
     }
 
+    /// Sends what has been written so far of the session being recorded, `id`: every whole line on
+    /// the disk, from where the service stands, and never the last piece - the visit goes on, and
+    /// only `run` says a session is over. Reaching the end of what is written is success. A
+    /// failure is noted in the session's entry and tried again at the next interval, counted
+    /// toward no limit; a refusal for good is kept as `run` keeps it, which ends the trying both ways.
+    static func live(_ dir: URL, uploads: inout [String: Any], id: String, transport: VenueUploadTransport,
+                     generics: VenueGenerics, now: Int64, log: (String) -> Void) -> Live {
+        var live = Live()
+        let file = VenueSessionFile.file(dir, id)
+        guard FileManager.default.fileExists(atPath: file.path), !settled(uploads, id) else { return live }
+        var entry = (uploads[id] as? [String: Any]) ?? [:]
+        defer { uploads[id] = entry }
+        let header = VenueSessionFile.header(file)
+        let account = VenueVisit.string(header ?? [:], "account")
+        let gateway = gatewayOf(header)
+        if header == nil || VenueVisit.string(header ?? [:], "id") != id {
+            live.refused = "the file has no header of its own"
+        } else if account.isEmpty {
+            live.refused = "recorded with nobody signed in"
+        } else if gateway.isEmpty {
+            live.refused = "the venue's config named no gateway to send it through"
+        }
+        if let refused = live.refused {
+            entry["refused"] = refused
+            log("upload: session \(id) is not sent: \(refused)")
+            return live
+        }
+        let device = VenueVisit.string(header ?? [:], "app_instance")
+        let before = VenueVisit.int64(entry, "sent")
+        do {
+            let written = try lineEnd(file)
+            if before >= written {
+                return live
+            }
+            let generic = try generics.of(transport, gateway, device)
+            if let refused = try send(file, id: id, dimension: VenueVisit.string(header ?? [:], "venue"), account: account, device: device,
+                                      generic: generic, entry: &entry, transport: transport, end: written, finishing: false) {
+                live.refused = refused
+                entry["refused"] = refused
+                log("upload: session \(id) is not sent: \(refused)")
+                return live
+            }
+            entry.removeValue(forKey: "error")
+            let held = VenueVisit.int64(entry, "sent")
+            live.sent = max(0, held - before)
+            log("upload: session \(id) as it goes - the service holds \(held) bytes (\(live.sent) sent now) through \(generic)")
+        } catch {
+            generics.forget(gateway)
+            let said = "\(error)"
+            live.error = said
+            // Said once while it keeps failing the same way: the next interval tries again.
+            if said != VenueVisit.string(entry, "error") {
+                log("upload: session \(id) as it goes not sent, tried again in a while: \(said)")
+            }
+            entry["error"] = said
+            entry["tried_at"] = now
+        }
+        return live
+    }
+
     /// The generic service the gateway hands this device: its address of the gateway's own scheme, as the page takes it.
-    private static func locate(_ transport: VenueUploadTransport, _ gateway: String, _ device: String) throws -> String {
+    static func locate(_ transport: VenueUploadTransport, _ gateway: String, _ device: String) throws -> String {
         var url = gateway + "/?header.type=GET_GENERIC_SERVICE"
         if !device.isEmpty, let encoded = device.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
             url += "&header.app_instance=" + encoded
@@ -148,20 +247,22 @@ enum VenueUpload {
         return generic
     }
 
-    /// Sends what the service lacks of one file. Nil when it is whole there, the reason when the service refuses it for good.
+    /// Sends what the service lacks of one file, up to `end`. Finishing - the visit over, `end` the
+    /// file's length - the last piece says so (`done`) and the answer has to call the session
+    /// whole; otherwise reaching `end` is all. Nil when that is done, the reason when the service
+    /// refuses the session for good.
     private static func send(_ file: URL, id: String, dimension: String, account: String, device: String, generic: String,
-                             entry: inout [String: Any], transport: VenueUploadTransport) throws -> String? {
-        let length = fileLength(file)
-        var offset = max(0, min(length, VenueVisit.int64(entry, "sent")))
+                             entry: inout [String: Any], transport: VenueUploadTransport, end: Int64, finishing: Bool) throws -> String? {
+        var offset = max(0, min(end, VenueVisit.int64(entry, "sent")))
         for _ in 0..<maxRounds {
-            let piece = try self.piece(file, offset: offset, max: pieceBytes)
-            let last = offset + Int64(piece.count) >= length
+            let piece = try self.piece(file, offset: offset, max: pieceBytes, end: end)
+            let last = offset + Int64(piece.count) >= end
             var head: [String: Any] = ["type": request, "account": account]
             if !device.isEmpty {
                 head["app_instance"] = device
             }
             var body: [String: Any] = ["dimension": dimension, "session": id, "offset": offset, "text": String(decoding: piece, as: UTF8.self)]
-            if last {
+            if last && finishing {
                 body["done"] = true
             }
             let json = try JSONSerialization.data(withJSONObject: ["header": head, "body": body])
@@ -171,18 +272,18 @@ enum VenueUpload {
                 return refused
             }
             let next = answer["next"] == nil ? -1 : VenueVisit.int64(answer, "next")
-            guard next >= 0, next <= length else {
-                throw VenueUploadError("the service says it holds \(next) bytes of a file of \(length)")
+            guard next >= 0, next <= end else {
+                throw VenueUploadError("the service says it holds \(next) bytes of \(end)")
             }
             entry["sent"] = next
-            if VenueVisit.bool(answer, "complete") {
+            if VenueVisit.bool(answer, "complete") || !finishing && next >= end {
                 return nil
             }
             if next == offset {
                 // It stands where it stood: with nothing left to send it will not call the session
                 // whole, and with a piece just sent it did not take the piece. Neither mends by asking again now.
                 throw VenueUploadError(piece.isEmpty
-                    ? "the service holds all \(length) bytes and does not call the session whole"
+                    ? "the service holds all \(end) bytes and does not call the session whole"
                     : "the service did not take the piece at \(offset)")
             }
             // Where the service stands is its word: behind what was believed, the next piece goes from there.
@@ -195,11 +296,12 @@ enum VenueUpload {
         ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? NSNumber)?.int64Value ?? 0
     }
 
-    /// The file from `offset`: at most `max` bytes cut at a line's end - or to the next line's end, or the file's, when one line is longer.
-    static func piece(_ file: URL, offset: Int64, max: Int) throws -> Data {
+    /// The file from `offset`: at most `max` bytes cut at a line's end - or to the next line's end, or the file's, when one line
+    /// is longer - of the file's first `end` bytes alone (all of them by default).
+    static func piece(_ file: URL, offset: Int64, max: Int, end: Int64 = Int64.max) throws -> Data {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
-        let length = Int64(handle.seekToEndOfFile())
+        let length = min(end, Int64(handle.seekToEndOfFile()))
         if offset >= length {
             return Data()
         }
@@ -211,8 +313,8 @@ enum VenueUpload {
         if let newline = bytes.lastIndex(of: UInt8(ascii: "\n")) {
             return bytes.prefix(through: newline)
         }
-        while true {
-            let more = handle.readData(ofLength: 4096)
+        while offset + Int64(bytes.count) < length {
+            let more = handle.readData(ofLength: Int(min(4096, length - offset - Int64(bytes.count))))
             if more.isEmpty {
                 return bytes
             }
@@ -222,6 +324,24 @@ enum VenueUpload {
             }
             bytes.append(more)
         }
+        return bytes
+    }
+
+    /// How much of the file is whole lines: the bytes up to and with its last line's end. A file still being written ends in one being written.
+    static func lineEnd(_ file: URL) throws -> Int64 {
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { try? handle.close() }
+        var position = Int64(handle.seekToEndOfFile())
+        while position > 0 {
+            let size = min(Int64(4096), position)
+            position -= size
+            handle.seek(toFileOffset: UInt64(position))
+            let block = handle.readData(ofLength: Int(size))
+            if let newline = block.lastIndex(of: UInt8(ascii: "\n")) {
+                return position + Int64(block.distance(from: block.startIndex, to: newline)) + 1
+            }
+        }
+        return 0
     }
 
     private static func object(_ text: String) throws -> [String: Any] {
@@ -286,25 +406,29 @@ final class VenueUploadHttp: VenueUploadTransport {
     }
 }
 
-/// Runs the uploads on a queue of its own, when there is something to send: asked at a session's
-/// end, as the tracker starts in a process iOS launched - for the app's opening, a region, a
-/// session's location updates - and when the app comes to the front. iOS has no scheduler to
-/// hand this to without the host app declaring a task for it, so a run that left something
-/// unsent is tried again while the process lives, and otherwise at the next of those moments.
-/// Each run holds a background task, which is what keeps a process that has just ended its
-/// location session alive for the seconds a visit's file takes.
+/// Runs the uploads on a queue of its own. The sessions that are over go when there is something
+/// to send: asked at a session's end, as the tracker starts in a process iOS launched - for the
+/// app's opening, a region, a session's location updates - and when the app comes to the front.
+/// iOS has no scheduler to hand this to without the host app declaring a task for it, so a run
+/// that left something unsent is tried again while the process lives, and otherwise at the next
+/// of those moments. What a confirmed visit has recorded while it goes on goes when the tracker
+/// asks (`kickLive`, every `upload_interval_s`). Each run holds a background task, which is what
+/// keeps a process that has just ended its location session alive for the seconds a visit's file
+/// takes. The queue is serial: one sending at a time, and the generic services the gateways named
+/// are kept on it.
 final class VenueUploader {
     static let shared = VenueUploader()
 
     private let queue = DispatchQueue(label: "world.dimx.venue-upload", qos: .utility)
     private let store = VenueTrackingStore()
+    private let generics = VenueGenerics()
     private var running = false
     private var again = false
     private var retryAfter: TimeInterval = 60
     /// Stands in for the network in a test; nil for the real one.
     var transport: VenueUploadTransport?
 
-    /// `activeId` is the session being written, which is never sent.
+    /// `activeId` is the session being written, which this never sends: its own end does.
     func kick(_ why: String, activeId: String?) {
         queue.async { [self] in
             if running {
@@ -314,34 +438,77 @@ final class VenueUploader {
             var uploads = store.uploads()
             guard !VenueUpload.pending(store.sessionsDirectory, uploads, activeId: activeId).isEmpty else { return }
             running = true
-            var task = UIBackgroundTaskIdentifier.invalid
-            task = UIApplication.shared.beginBackgroundTask(withName: "dimx-venue-upload") {
-                // iOS wants the time back: what is unsent is tried at the next run.
-                UIApplication.shared.endBackgroundTask(task)
-                task = .invalid
-            }
+            let task = BackgroundTask()
             let outcome = VenueUpload.run(store.sessionsDirectory, uploads: &uploads, activeId: activeId,
-                                          transport: transport ?? VenueUploadHttp(), now: Int64(Date().timeIntervalSince1970 * 1000),
-                                          log: { [store] line in store.log(line) })
+                                          transport: transport ?? VenueUploadHttp(), generics: generics,
+                                          now: Int64(Date().timeIntervalSince1970 * 1000), log: { [store] line in store.log(line) })
             store.writeUploads(uploads)
             store.log("upload (\(why)): \(outcome)")
             running = false
-            if task != .invalid {
-                UIApplication.shared.endBackgroundTask(task)
-            }
+            task.end()
             if outcome.sent + outcome.refused > 0 {
                 DispatchQueue.main.async { VenueTracker.shared.uploadsChanged() }
             }
             if outcome.waiting > 0 {
                 let wait = retryAfter
                 retryAfter = min(retryAfter * 2, 15 * 60)
-                queue.asyncAfter(deadline: .now() + wait) { [self] in kick("after \(Int(wait)) s", activeId: VenueTracker.shared.currentSessionId()) }
+                queue.asyncAfter(deadline: .now() + wait) { [self] in rekick("after \(Int(wait)) s") }
             } else {
                 retryAfter = 60
                 if again {
                     again = false
-                    kick("asked meanwhile", activeId: VenueTracker.shared.currentSessionId())
+                    rekick("asked meanwhile")
                 }
+            }
+        }
+    }
+
+    /// What has been written of the session being recorded, `id`, sent while the visit goes on -
+    /// asked by the tracker when it is due, and only for a visit the judge confirmed.
+    func kickLive(_ id: String) {
+        queue.async { [self] in
+            var uploads = store.uploads()
+            let task = BackgroundTask()
+            let live = VenueUpload.live(store.sessionsDirectory, uploads: &uploads, id: id, transport: transport ?? VenueUploadHttp(),
+                                        generics: generics, now: Int64(Date().timeIntervalSince1970 * 1000),
+                                        log: { [store] line in store.log(line) })
+            store.writeUploads(uploads)
+            task.end()
+            if live.refused != nil {
+                DispatchQueue.main.async { VenueTracker.shared.uploadsChanged() }
+            }
+        }
+    }
+
+    /// A run asked again from this queue: which session is being written is the tracker's to say, on the main thread.
+    private func rekick(_ why: String) {
+        DispatchQueue.main.async { [self] in
+            kick(why, activeId: VenueTracker.shared.currentSessionId())
+        }
+    }
+
+    /// The time a run asks of iOS: ended by the run, or by iOS wanting it back (what is unsent is
+    /// then tried at the next run) - whichever comes first, and only once.
+    private final class BackgroundTask {
+        private let lock = NSLock()
+        private var id = UIBackgroundTaskIdentifier.invalid
+
+        init() {
+            let id = UIApplication.shared.beginBackgroundTask(withName: "dimx-venue-upload") { [weak self] in
+                self?.end()
+            }
+            lock.lock()
+            self.id = id
+            lock.unlock()
+        }
+
+        func end() {
+            lock.lock()
+            let id = self.id
+            self.id = .invalid
+            lock.unlock()
+            if id != .invalid {
+                UIApplication.shared.endBackgroundTask(id)
             }
         }
     }
