@@ -9,12 +9,13 @@ import Foundation
 /// - `Judge` - the visit's state. A visit starts as a candidate: something said the phone may be
 ///   at the venue. It becomes inside on evidence of the venue itself - one of its beacons heard,
 ///   good fixes within its site - is leaving when a fence exit or a fix outside says so, and over
-///   only when that has stood for the confirmation time with no beacon heard and no fix inside
-///   meanwhile. Evidence is only ever what was observed: silence is nothing, and a visit nobody
-///   observed anything of for long enough ends as lost, not as stayed.
+///   when that has stood for the confirmation time with no beacon heard and no fix inside
+///   meanwhile - or at once when there is no doubt of it: good fixes clearly beyond the fence.
+///   Evidence is only ever what was observed: silence is nothing, and a visit nobody observed
+///   anything of for long enough ends as lost, not as stayed.
 /// - `BleWindows` - the beacons heard, summed into windows; a window with nothing in it is
 ///   written too, since "listened and heard nothing" and "was not listening" are different facts.
-/// - `FixSampler` - which fixes are kept.
+/// - `FixSampler` - which fixes are kept: one a fix interval while the phone moves.
 ///
 /// Times are milliseconds since the epoch, as Android keeps them, so one reader takes both
 /// phones' sessions.
@@ -159,9 +160,14 @@ enum VenueVisit {
         /// indoors a fix can be far out: more of them, over longer.
         static let outsideFixesUnheard = 5
         static let outsideSpanUnheardMs: Int64 = 120_000
+        /// Good fixes in a row whose error circles lie wholly beyond the fence - and outside the
+        /// site - end a visit that is leaving at once: no doubt is left for the confirmation time
+        /// to settle. With the fence's own exit beside them, one is enough.
+        static let beyondFixesNeeded = 2
 
         private let rules: Rules
         private let siteRadius: Double
+        private let fenceRadius: Double
         private let venueHasBeacons: Bool
 
         var state = Judge.candidate
@@ -175,14 +181,17 @@ enum VenueVisit {
         var lastInsideAt: Int64 = 0
         /// The last observation of any kind, whatever it said.
         var lastEvidenceAt: Int64 = 0
-        /// The last fix as it was handed over - its distance and accuracy - for a phone said not to have moved since; -1 while there is none.
+        /// The last fix as it was handed over - its distances and accuracy - for a phone said not to have moved since; -1 while there is none.
         var lastFixDistance = -1.0
+        var lastFixFenceDistance = -1.0
         var lastFixAccuracy = -1.0
         var insideFixes = 0
         var insideFixesSince: Int64 = 0
         var outsideFixes = 0
         var outsideFixesSince: Int64 = 0
         var lastOutsideAt: Int64 = 0
+        /// Good fixes in a row clearly beyond the fence (`beyondFixesNeeded`).
+        var beyondFixes = 0
         var fenceExitAt: Int64 = 0
         var leavingSince: Int64 = 0
         var leavingWhy = ""
@@ -192,9 +201,10 @@ enum VenueVisit {
         var endedWhy = ""
         var endedBy = ""
 
-        init(rules: Rules, siteRadiusM: Double, venueHasBeacons: Bool, startedAt: Int64) {
+        init(rules: Rules, siteRadiusM: Double, fenceRadiusM: Double, venueHasBeacons: Bool, startedAt: Int64) {
             self.rules = rules
             self.siteRadius = siteRadiusM
+            self.fenceRadius = fenceRadiusM
             self.venueHasBeacons = venueHasBeacons
             self.startedAt = startedAt
             self.liveSince = startedAt
@@ -212,7 +222,9 @@ enum VenueVisit {
             liveSince = t
             // Whatever the phone did meanwhile, the fix from before no longer says where it is.
             lastFixDistance = -1
+            lastFixFenceDistance = -1
             lastFixAccuracy = -1
+            beyondFixes = 0
         }
 
         /// One of the venue's beacons was heard.
@@ -229,16 +241,26 @@ enum VenueVisit {
             return noteInside(t) ? Change(what: Change.stayed, why: "", by: "beacon", at: t) : nil
         }
 
-        /// A fix, as its distance from the middle of the venue's site and its accuracy, both in metres.
-        func onFix(_ t: Int64, distanceM: Double, accuracyM: Double) -> Change? {
+        /// A fix, as its distance from the middle of the venue's site, its distance from the middle
+        /// of the venue's fence - below zero for none known - and its accuracy, in metres.
+        func onFix(_ t: Int64, distanceM: Double, fenceDistanceM: Double, accuracyM: Double) -> Change? {
             if ended {
                 return nil
             }
             lastEvidenceAt = t
             lastFixDistance = distanceM
+            lastFixFenceDistance = fenceDistanceM
             lastFixAccuracy = accuracyM
             let accuracy = accuracyM > 0 ? accuracyM : 100
-            if distanceM <= siteRadius && accuracy <= Judge.goodAccuracyM {
+            let good = accuracy <= Judge.goodAccuracyM
+            let outside = distanceM - accuracy > siteRadius + Judge.outsideMarginM
+            if good {
+                // A good fix clearly beyond the fence adds to the run, any other good fix breaks
+                // it; a poor one says nothing either way.
+                let beyond = outside && fenceDistanceM >= 0 && fenceDistanceM - accuracy > fenceRadius
+                beyondFixes = beyond ? beyondFixes + 1 : 0
+            }
+            if distanceM <= siteRadius && good {
                 if insideFixes == 0 {
                     insideFixesSince = t
                 }
@@ -250,7 +272,7 @@ enum VenueVisit {
                 }
                 return stayed ? Change(what: Change.stayed, why: "", by: "gps", at: t) : nil
             }
-            if distanceM - accuracy > siteRadius + Judge.outsideMarginM {
+            if outside {
                 insideFixes = 0
                 insideFixesSince = 0
                 if outsideFixes == 0 {
@@ -258,7 +280,7 @@ enum VenueVisit {
                 }
                 outsideFixes += 1
                 lastOutsideAt = t
-                return maybeLeave(t)
+                return maybeLeave(t) ?? maybeDepart(t)
             }
             return nil   // it could be either side: an observation, and no evidence
         }
@@ -270,7 +292,7 @@ enum VenueVisit {
             if ended || lastFixDistance < 0 {
                 return nil
             }
-            return onFix(t, distanceM: lastFixDistance, accuracyM: lastFixAccuracy)
+            return onFix(t, distanceM: lastFixDistance, fenceDistanceM: lastFixFenceDistance, accuracyM: lastFixAccuracy)
         }
 
         /// The platform's fence round the venue was crossed.
@@ -280,6 +302,7 @@ enum VenueVisit {
             }
             if entered {
                 fenceExitAt = 0
+                beyondFixes = 0
                 // The fence is wider than the site, so coming back into it proves nothing of the
                 // venue; it only takes back an exit that nothing but the fence had said.
                 if state == Judge.leavingState && outsideFixes == 0 {
@@ -294,7 +317,7 @@ enum VenueVisit {
             if state == Judge.candidate && lastBeaconAt == 0 && insideFixes == 0 {
                 return end(t, "not_confirmed", "fence")
             }
-            return maybeLeave(t)
+            return maybeLeave(t) ?? maybeDepart(t)
         }
 
         /// Time passed: what it concludes by itself. Called every few seconds while a session runs.
@@ -312,6 +335,9 @@ enum VenueVisit {
                 return leaving
             }
             if state == Judge.leavingState {
+                if let departed = maybeDepart(t) {
+                    return departed
+                }
                 let quiet = t - leavingSince >= rules.exitConfirmMs && t - lastInsideAt >= rules.exitConfirmMs
                 if quiet {
                     let unheard = venueHasBeacons && !listening
@@ -332,6 +358,7 @@ enum VenueVisit {
                     outsideFixes = 0
                     outsideFixesSince = 0
                     lastOutsideAt = 0
+                    beyondFixes = 0
                     return Change(what: Change.stayed, why: "", by: "stale", at: t)
                 }
             }
@@ -356,6 +383,7 @@ enum VenueVisit {
             outsideFixes = 0
             outsideFixesSince = 0
             lastOutsideAt = 0
+            beyondFixes = 0
             fenceExitAt = 0
             if state == Judge.leavingState {
                 state = Judge.inside
@@ -392,6 +420,20 @@ enum VenueVisit {
             return Change(what: Change.leaving, why: "", by: why, at: t)
         }
 
+        /// A departure there is no doubt of ends the visit without waiting out the confirmation:
+        /// `beyondFixesNeeded` good fixes in a row clearly beyond the fence, or the fence's own exit
+        /// and one such fix. A phone between the site and the fence - at the venue's door, or
+        /// indoors with a fix thrown out - waits for the confirmation as ever.
+        private func maybeDepart(_ t: Int64) -> Change? {
+            if state != Judge.leavingState || beyondFixes == 0 {
+                return nil
+            }
+            if beyondFixes < Judge.beyondFixesNeeded && fenceExitAt == 0 {
+                return nil
+            }
+            return end(t, "departed", fenceExitAt > 0 ? "fence+gps" : "gps")
+        }
+
         private func end(_ t: Int64, _ why: String, _ by: String) -> Change {
             state = Judge.endedState
             endedAt = t
@@ -405,17 +447,18 @@ enum VenueVisit {
                 "state": state, "started_at": startedAt, "live_since": liveSince,
                 "confirmed_at": confirmedAt, "confirmed_by": confirmedBy,
                 "last_beacon_at": lastBeaconAt, "last_inside_at": lastInsideAt, "last_evidence_at": lastEvidenceAt,
-                "last_fix_d": lastFixDistance, "last_fix_acc": lastFixAccuracy,
+                "last_fix_d": lastFixDistance, "last_fix_fd": lastFixFenceDistance, "last_fix_acc": lastFixAccuracy,
                 "inside_fixes": insideFixes, "inside_fixes_since": insideFixesSince,
                 "outside_fixes": outsideFixes, "outside_fixes_since": outsideFixesSince, "last_outside_at": lastOutsideAt,
+                "beyond_fixes": beyondFixes,
                 "fence_exit_at": fenceExitAt, "leaving_since": leavingSince, "leaving_why": leavingWhy,
                 "listening": listening, "ended_at": endedAt, "ended_why": endedWhy, "ended_by": endedBy,
             ]
         }
 
         /// A judge as `toJson` kept it, for a process that takes a session up again.
-        static func from(_ json: [String: Any], rules: Rules, siteRadiusM: Double, venueHasBeacons: Bool) -> Judge {
-            let judge = Judge(rules: rules, siteRadiusM: siteRadiusM, venueHasBeacons: venueHasBeacons,
+        static func from(_ json: [String: Any], rules: Rules, siteRadiusM: Double, fenceRadiusM: Double, venueHasBeacons: Bool) -> Judge {
+            let judge = Judge(rules: rules, siteRadiusM: siteRadiusM, fenceRadiusM: fenceRadiusM, venueHasBeacons: venueHasBeacons,
                               startedAt: VenueVisit.int64(json, "started_at"))
             let state = VenueVisit.string(json, "state")
             judge.state = [Judge.inside, Judge.leavingState, Judge.endedState].contains(state) ? state : Judge.candidate
@@ -426,12 +469,14 @@ enum VenueVisit {
             judge.lastInsideAt = VenueVisit.int64(json, "last_inside_at")
             judge.lastEvidenceAt = VenueVisit.int64(json, "last_evidence_at")
             judge.lastFixDistance = VenueVisit.number(json, "last_fix_d", -1)
+            judge.lastFixFenceDistance = VenueVisit.number(json, "last_fix_fd", -1)
             judge.lastFixAccuracy = VenueVisit.number(json, "last_fix_acc", -1)
             judge.insideFixes = Int(VenueVisit.number(json, "inside_fixes", 0))
             judge.insideFixesSince = VenueVisit.int64(json, "inside_fixes_since")
             judge.outsideFixes = Int(VenueVisit.number(json, "outside_fixes", 0))
             judge.outsideFixesSince = VenueVisit.int64(json, "outside_fixes_since")
             judge.lastOutsideAt = VenueVisit.int64(json, "last_outside_at")
+            judge.beyondFixes = Int(VenueVisit.number(json, "beyond_fixes", 0))
             judge.fenceExitAt = VenueVisit.int64(json, "fence_exit_at")
             judge.leavingSince = VenueVisit.int64(json, "leaving_since")
             judge.leavingWhy = VenueVisit.string(json, "leaving_why")
@@ -591,34 +636,41 @@ enum VenueVisit {
 
     // MARK: - The fixes that are kept
 
-    /// Which fixes are written: the ones that say something new, and one a minute whatever it
-    /// says - a kept fix carries how many were passed over since the one before it, which is the
-    /// proof that fixes kept coming.
+    /// Which fixes are written: one a fix interval at most - Core Location hands them faster -
+    /// and of those every one that moved half a metre from the last one written, so the path is
+    /// as dense as the interval while the visitor walks and a phone lying still does not write its
+    /// one place over and over. One is written every minute whatever it says: the proof fixes kept
+    /// coming, which is what a still phone's time at the venue is counted from. A written fix
+    /// carries how many were passed over since the one before it.
     final class FixSampler {
-        static let minIntervalMs: Int64 = 4_000
+        /// A fix this far from the last one written has moved.
+        static let minMoveM = 0.5
+        /// One is written this often whatever it says.
         static let keepEveryMs: Int64 = 60_000
-        static let minMoveM = 3.0
+        /// The interval is held to this much of itself: a fix handed a little early is not lost to the jitter.
+        static let intervalSlack = 0.9
 
+        private let minIntervalMs: Int64
         private var any = false
         private var lastAt: Int64 = 0
         private var lastLat = 0.0
         private var lastLng = 0.0
-        private var lastAccuracy = 0.0
         private var skipped = 0
 
+        /// One fix an `intervalMs` at most: the config's fix_interval_s.
+        init(intervalMs: Int64) {
+            minIntervalMs = max(1_000, Int64(VenueVisit.roundHalfUp(Double(intervalMs) * FixSampler.intervalSlack)))
+        }
+
         /// Answers how many fixes were passed over since the last kept one when this one is to be kept, -1 to pass it over.
-        func offer(_ t: Int64, lat: Double, lng: Double, accuracyM: Double) -> Int {
-            let accuracy = accuracyM > 0 ? accuracyM : 100
+        func offer(_ t: Int64, lat: Double, lng: Double) -> Int {
             let keep: Bool
             if !any {
                 keep = true
-            } else if t - lastAt >= FixSampler.keepEveryMs {
-                keep = true
-            } else if t - lastAt < FixSampler.minIntervalMs {
+            } else if t - lastAt < minIntervalMs {
                 keep = false
             } else {
-                let moved = VenueVisit.distanceM(lastLat, lastLng, lat, lng)
-                keep = moved >= max(FixSampler.minMoveM, 0.5 * min(accuracy, lastAccuracy)) || accuracy <= 0.7 * lastAccuracy
+                keep = t - lastAt >= FixSampler.keepEveryMs || VenueVisit.distanceM(lastLat, lastLng, lat, lng) >= FixSampler.minMoveM
             }
             if !keep {
                 skipped += 1
@@ -629,9 +681,13 @@ enum VenueVisit {
             lastAt = t
             lastLat = lat
             lastLng = lng
-            lastAccuracy = accuracy
             skipped = 0
             return passed
+        }
+
+        /// A fix that is not written whatever it says - one beyond the fence: counted among those passed over.
+        func pass() {
+            skipped += 1
         }
 
         /// A stretch with no fixes ended the run: the next fix is kept whatever it says.

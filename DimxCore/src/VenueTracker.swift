@@ -12,11 +12,12 @@ import UserNotifications
 ///
 /// 1. A session begins in front of the visitor. With the app opened and a venue tracked, the
 ///    tracker looks for it - a fix, and a few seconds of ranging the venue's beacons - and, the
-///    venue found, starts a background location session (CLBackgroundActivitySession with
-///    Core Location's live updates from iOS 17; the location manager's background updates before).
-///    That session is what iOS lets go on once the app leaves the screen and the phone is locked,
-///    under "While Using" as under "Always", with the system's own indicator on the status bar.
-///    A new session is never begun from the background.
+///    venue found, starts the location manager's standard updates, never paused - from iOS 17
+///    under a CLBackgroundActivitySession, with Core Location's live updates beside them. That is
+///    what iOS lets go on once the app leaves the screen and the phone is locked, under "While
+///    Using" as under "Always", with the system's own indicator on the status bar - and, the
+///    updates going on while the phone is still, what keeps the app from being suspended under a
+///    visitor who stands. A new session is never begun from the background.
 /// 2. A session a dead process left is taken up again by the next one - the app opened, or
 ///    relaunched by iOS for the location updates or a region - while it is still the visitor's
 ///    choice, the location is still allowed and the recording stopped less than the venue's
@@ -76,7 +77,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         let reason: String
         let judge: VenueVisit.Judge
         let windows: VenueVisit.BleWindows
-        let sampler = VenueVisit.FixSampler()
+        let sampler: VenueVisit.FixSampler
         var id = ""
         var account = ""
         var writer: VenueSessionFile.Writer?
@@ -109,6 +110,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             self.reason = reason
             self.judge = judge
             self.windows = VenueVisit.BleWindows(windowMs: Int64(config.sampling.bleWindowS) * 1000)
+            self.sampler = VenueVisit.FixSampler(intervalMs: Int64(config.sampling.fixIntervalS) * 1000)
         }
     }
 
@@ -154,7 +156,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
     private var updatesTask: Task<Void, Never>?
     private var streamGeneration = 0
     private var streamName = "none"
-    private var legacyStream = false
+    /// Whether the location manager's standard updates were started for the session: they carry its fixes.
+    private var standardStream = false
     private var rangingUuid: UUID?
     private var lastRangeElapsed: Int64 = -1
     private var lastRangeWall: Int64 = 0
@@ -892,13 +895,18 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             var said = "arrival at \(sample.config.name) noted"
             if let fix = sample.fix {
                 let distance = sample.config.site.distance(toLat: fix.coordinate.latitude, lng: fix.coordinate.longitude)
-                arrival["fix"] = [
+                var noted: [String: Any] = [
                     "t": VenueTracker.millis(fix.timestamp),
-                    "lat": VenueVisit.Records.round(fix.coordinate.latitude, 1e6),
-                    "lng": VenueVisit.Records.round(fix.coordinate.longitude, 1e6),
                     "acc": VenueVisit.Records.round(fix.horizontalAccuracy, 10),
                     "d": Int(distance.rounded()),
-                ] as [String: Any]
+                ]
+                // Where it was only when that is within the fence: a region's event can come with
+                // the phone still outside it, and no position past the fence is kept.
+                if sample.config.fence.distance(toLat: fix.coordinate.latitude, lng: fix.coordinate.longitude) <= sample.config.fence.radius {
+                    noted["lat"] = VenueVisit.Records.round(fix.coordinate.latitude, 1e6)
+                    noted["lng"] = VenueVisit.Records.round(fix.coordinate.longitude, 1e6)
+                }
+                arrival["fix"] = noted
                 said += ": a fix \(Int(distance.rounded())) m from its middle, +-\(Int(fix.horizontalAccuracy.rounded())) m"
             }
             if !sample.beacons.isEmpty {
@@ -1189,7 +1197,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                VenueSessionFile.end(file) == nil, let judge = kept["judge"] as? [String: Any],
                now - lastRecordAt <= config.rules.resumeWindowMs {
                 let session = Session(config: config, reason: reason,
-                                      judge: VenueVisit.Judge.from(judge, rules: config.rules, siteRadiusM: config.site.radius, venueHasBeacons: hasBeacons))
+                                      judge: VenueVisit.Judge.from(judge, rules: config.rules, siteRadiusM: config.site.radius,
+                                                                   fenceRadiusM: config.fence.radius, venueHasBeacons: hasBeacons))
                 do {
                     session.writer = try VenueSessionFile.Writer(dir: dir, id: keptId)
                 } catch {
@@ -1229,7 +1238,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                 return false
             }
             let session = Session(config: config, reason: reason,
-                                  judge: VenueVisit.Judge(rules: config.rules, siteRadiusM: config.site.radius, venueHasBeacons: hasBeacons, startedAt: now))
+                                  judge: VenueVisit.Judge(rules: config.rules, siteRadiusM: config.site.radius, fenceRadiusM: config.fence.radius,
+                                                          venueHasBeacons: hasBeacons, startedAt: now))
             session.id = VenueSessionFile.newId(dimension: config.dimension, now: now)
             do {
                 session.writer = try VenueSessionFile.Writer(dir: dir, id: session.id)
@@ -1317,10 +1327,16 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
 
     // MARK: - Fixes
 
-    /// The background location session and the fixes. From iOS 17 that is a
-    /// CLBackgroundActivitySession - what keeps the app running and counted as in use once it
-    /// leaves the screen - with Core Location's live updates, which stop by themselves while the
-    /// phone does not move and say so; before, the location manager's own background updates.
+    /// The fixes, and what keeps the app running for them: the location manager's standard
+    /// updates at the GPS's accuracy, never paused. They go on while the phone is still, which is
+    /// what keeps iOS from suspending the app under a visitor who stands - the live updates alone
+    /// stop for a still phone, and then nothing was recorded, heard or sent for as long as the
+    /// visitor stood (a quarter of an iPhone's visit on 2026-11-16, up to fourteen minutes at a
+    /// time). From iOS 17 a CLBackgroundActivitySession - first, so that a process iOS relaunched
+    /// in the background may start updates - and the live updates run beside them: what has iOS
+    /// relaunch the app when the process is killed under a session, and Core Location's word on
+    /// whether the phone is still and why fixes are not coming. Their locations are the same Core
+    /// Location's, so the standard updates alone carry the fixes.
     private func startFixes() {
         guard let manager = manager, session != nil else { return }
         let background = VenueTracker.hasLocationBackgroundMode()
@@ -1328,10 +1344,20 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             store.log("no location background mode in the app's Info.plist: the session lives only while the app is in front")
         }
         streamGeneration += 1
+        if #available(iOS 17.0, *), background {
+            backgroundSession = CLBackgroundActivitySession()
+        }
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.distanceFilter = kCLDistanceFilterNone
+        manager.activityType = .fitness
+        manager.pausesLocationUpdatesAutomatically = false
+        if background {
+            manager.allowsBackgroundLocationUpdates = true
+            manager.showsBackgroundLocationIndicator = true
+        }
+        manager.startUpdatingLocation()
+        standardStream = true
         if #available(iOS 17.0, *) {
-            if background {
-                backgroundSession = CLBackgroundActivitySession()
-            }
             let generation = streamGeneration
             updatesTask = Task { @MainActor [weak self] in
                 do {
@@ -1345,21 +1371,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                     }
                 }
             }
-            legacyStream = false
-            streamName = "live"
-        } else {
-            manager.desiredAccuracy = kCLLocationAccuracyBest
-            manager.distanceFilter = kCLDistanceFilterNone
-            manager.activityType = .fitness
-            manager.pausesLocationUpdatesAutomatically = false
-            if background {
-                manager.allowsBackgroundLocationUpdates = true
-                manager.showsBackgroundLocationIndicator = true
-            }
-            manager.startUpdatingLocation()
-            legacyStream = true
-            streamName = "legacy"
         }
+        streamName = "standard"
         write(event("fix_mode", ["mode": streamName, "background": background]))
     }
 
@@ -1367,17 +1380,17 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         streamGeneration += 1
         updatesTask?.cancel()
         updatesTask = nil
-        if #available(iOS 17.0, *), let held = backgroundSession as? CLBackgroundActivitySession {
-            held.invalidate()
-        }
-        backgroundSession = nil
-        if legacyStream, let manager = manager {
+        if standardStream, let manager = manager {
             manager.stopUpdatingLocation()
             if VenueTracker.hasLocationBackgroundMode() {
                 manager.allowsBackgroundLocationUpdates = false
             }
-            legacyStream = false
+            standardStream = false
         }
+        if #available(iOS 17.0, *), let held = backgroundSession as? CLBackgroundActivitySession {
+            held.invalidate()
+        }
+        backgroundSession = nil
         streamName = "none"
     }
 
@@ -1409,8 +1422,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             stationary = update.isStationary   // iOS 17's name for it
         }
         if stationary != session.stationary {
-            // Core Location stops sending fixes while the phone does not move, and says so: a
-            // stretch without fixes after this is the phone's motion sensors' word, not a hole.
+            // The live updates stop while the phone does not move, and say so: the phone's motion
+            // sensors' word, which the tick has the judge stand on the last fix by (the standard
+            // updates, which carry the fixes, go on regardless).
             session.stationary = stationary
             write(event(stationary ? "stationary" : "moving"))
         }
@@ -1420,11 +1434,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             write(event("fix_diagnostics", ["diag": diagnostics.isEmpty ? "ok" : diagnostics, "app_front": appActive]))
             store.log("session \(session.id): Core Location says [\(diagnostics.isEmpty ? "ok" : diagnostics)], app \(VenueTracker.appStateName())")
         }
-        if let location = update.location {
-            onFix(location)
-        } else {
-            tickIfDue()
-        }
+        // Its location, if any, is the standard updates' too: they carry the fixes (startFixes).
+        tickIfDue()
     }
 
     private func onFix(_ location: CLLocation) {
@@ -1444,7 +1455,16 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         let lng = location.coordinate.longitude
         let accuracy = location.horizontalAccuracy
         let distance = session.config.site.distance(toLat: lat, lng: lng)
-        let skipped = session.sampler.offer(now, lat: lat, lng: lng, accuracyM: accuracy)
+        let fenceDistance = session.config.fence.distance(toLat: lat, lng: lng)
+        let skipped: Int
+        if fenceDistance > session.config.fence.radius {
+            // Beyond the fence - past the venue's region - the judge hears of the fix and the
+            // file does not: where a visitor goes once outside it is none of the visit's business.
+            session.sampler.pass()
+            skipped = -1
+        } else {
+            skipped = session.sampler.offer(now, lat: lat, lng: lng)
+        }
         if skipped >= 0 {
             var record = VenueVisit.Records.fix(min(at, now), lat: lat, lng: lng, accuracyM: accuracy, skipped: skipped, source: "cl")
             record["d"] = Int(distance.rounded())
@@ -1467,14 +1487,14 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             write(record)
             session.fixes += 1
         }
-        apply(session.judge.onFix(now, distanceM: distance, accuracyM: accuracy))
+        apply(session.judge.onFix(now, distanceM: distance, fenceDistanceM: fenceDistance, accuracyM: accuracy))
         tickIfDue()
     }
 
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let last = locations.last else { return }
         if session != nil {
-            if legacyStream {
+            if standardStream {
                 for location in locations {
                     onFix(location)
                 }
@@ -1992,7 +2012,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
     private static func arrivalAsWritten(_ arrival: [String: Any]) -> [String: Any] {
         var noted = arrival
         if var fix = noted["fix"] as? [String: Any] {
-            for (key, scale) in [("lat", 1e6), ("lng", 1e6), ("acc", 10.0)] {
+            for (key, scale) in [("lat", 1e6), ("lng", 1e6), ("acc", 10.0)] where fix[key] != nil {
                 fix[key] = VenueVisit.Records.round(VenueVisit.number(fix, key, 0), scale)
             }
             noted["fix"] = fix
