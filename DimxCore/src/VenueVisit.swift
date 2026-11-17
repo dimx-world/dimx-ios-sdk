@@ -16,6 +16,8 @@ import Foundation
 /// - `BleWindows` - the beacons heard, summed into windows; a window with nothing in it is
 ///   written too, since "listened and heard nothing" and "was not listening" are different facts.
 /// - `FixSampler` - which fixes are kept: one a fix interval while the phone moves.
+/// - `FixGate` - which fixes are believed at all: none the phone could not have reached from the
+///   last one believed, which is what a faked satellite signal makes.
 ///
 /// Times are milliseconds since the epoch, as Android keeps them, so one reader takes both
 /// phones' sessions.
@@ -164,6 +166,10 @@ enum VenueVisit {
         /// site - end a visit that is leaving at once: no doubt is left for the confirmation time
         /// to settle. With the fence's own exit beside them, one is enough.
         static let beyondFixesNeeded = 2
+        /// A fence crossing this close to a fix the gate turned away (`FixGate`) came from the same
+        /// false position: the platform works its fence out from the fixes it hands over, and its
+        /// exit comes with the jump, up to a few seconds either side of it.
+        static let implausibleDoubtMs: Int64 = 30_000
 
         private let rules: Rules
         private let siteRadius: Double
@@ -195,6 +201,8 @@ enum VenueVisit {
         var fenceExitAt: Int64 = 0
         var leavingSince: Int64 = 0
         var leavingWhy = ""
+        /// The last fix the gate turned away (`FixGate`): the fence's word is doubted around it.
+        var lastImplausibleAt: Int64 = 0
         /// Whether the venue's beacons are being listened for at all.
         var listening = false
         var endedAt: Int64 = 0
@@ -285,6 +293,27 @@ enum VenueVisit {
             return nil   // it could be either side: an observation, and no evidence
         }
 
+        /// A fix the phone could not have reached (`FixGate`): no evidence of anything, since it says
+        /// nothing true of where the phone is. The fence's exit heard just before it came from the
+        /// same false position, so it is taken back - and with it a leaving that rested on it alone.
+        func onImplausibleFix(_ t: Int64) -> Change? {
+            if ended {
+                return nil
+            }
+            lastImplausibleAt = t
+            if fenceExitAt == 0 || t - fenceExitAt > Judge.implausibleDoubtMs {
+                return nil
+            }
+            fenceExitAt = 0
+            if state == Judge.leavingState && outsideFixes == 0 {
+                state = Judge.inside
+                leavingSince = 0
+                leavingWhy = ""
+                return Change(what: Change.stayed, why: "", by: "implausible", at: t)
+            }
+            return nil
+        }
+
         /// The platform's word that the phone has not moved since its last fix - Core Location
         /// says so, and sends no fixes meanwhile: that fix stands, observed again now. Nothing
         /// without a fix to stand on.
@@ -312,6 +341,9 @@ enum VenueVisit {
                     return Change(what: Change.stayed, why: "", by: "fence", at: t)
                 }
                 return nil
+            }
+            if lastImplausibleAt > 0 && t - lastImplausibleAt <= Judge.implausibleDoubtMs {
+                return nil   // worked out from the false position the gate has just turned away
             }
             fenceExitAt = t
             if state == Judge.candidate && lastBeaconAt == 0 && insideFixes == 0 {
@@ -452,6 +484,7 @@ enum VenueVisit {
                 "outside_fixes": outsideFixes, "outside_fixes_since": outsideFixesSince, "last_outside_at": lastOutsideAt,
                 "beyond_fixes": beyondFixes,
                 "fence_exit_at": fenceExitAt, "leaving_since": leavingSince, "leaving_why": leavingWhy,
+                "last_implausible_at": lastImplausibleAt,
                 "listening": listening, "ended_at": endedAt, "ended_why": endedWhy, "ended_by": endedBy,
             ]
         }
@@ -480,6 +513,7 @@ enum VenueVisit {
             judge.fenceExitAt = VenueVisit.int64(json, "fence_exit_at")
             judge.leavingSince = VenueVisit.int64(json, "leaving_since")
             judge.leavingWhy = VenueVisit.string(json, "leaving_why")
+            judge.lastImplausibleAt = VenueVisit.int64(json, "last_implausible_at")
             judge.listening = VenueVisit.bool(json, "listening")
             judge.endedAt = VenueVisit.int64(json, "ended_at")
             judge.endedWhy = VenueVisit.string(json, "ended_why")
@@ -694,6 +728,82 @@ enum VenueVisit {
         func reset() {
             any = false
             skipped = 0
+        }
+    }
+
+    // MARK: - The fixes that are believed
+
+    /// Whether a fix can be where the phone is. One the phone could not have reached from the last
+    /// fix believed - at `maxSpeedMps`, give or take both fixes' accuracy and `marginM` - is a
+    /// position the satellites' signals were faked into, and is turned away whatever it says:
+    /// around Kyiv the air defence's spoofing puts a phone in Lima, Peru, driving a loop at 56 m/s
+    /// with the accuracy of a good fix and no mock flag - the signals are real radio - and the
+    /// platform's fence is crossed with it (Ocean Plaza, 2026-11-17). A session begins on the
+    /// venue's word that the phone is there, so the gate starts from the venue's fence: its middle,
+    /// give or take its radius, at the session's start. A fix believed is what the next is measured
+    /// from when it says more of where the phone is than the last one does by then; a poor one does
+    /// not move it. The backend holds a session's fixes to the same rule (loyalty-svc
+    /// visits/Plausibility.ts).
+    final class FixGate {
+        /// Faster than any visitor goes - a car leaving the car park makes 15 m/s - and far slower than a faked jump: 190,000 m/s and more.
+        static let maxSpeedMps = 100.0
+        /// Allowed beyond both accuracies: a stated accuracy is no bound, and a session may begin on a coarse fix a little off the fence.
+        static let marginM = 1_000.0
+        /// A fix whose accuracy is not known is taken as this accurate, as the judge takes it.
+        static let unknownAccuracyM = 100.0
+
+        private var at: Int64
+        private var lat: Double
+        private var lng: Double
+        private var accuracy: Double
+        /// Fixes turned away in a row, and when the first of them came; 0 while the last fix was believed.
+        private(set) var run = 0
+        private(set) var runSince: Int64 = 0
+
+        /// From the venue: its fence's middle, give or take its radius, at the session's start.
+        init(lat: Double, lng: Double, radiusM: Double, t: Int64) {
+            at = t
+            self.lat = lat
+            self.lng = lng
+            accuracy = max(0, radiusM)
+        }
+
+        /// Whether the fix can be where the phone is. One turned away adds to the run; one believed ends it.
+        func offer(_ t: Int64, lat fixLat: Double, lng fixLng: Double, accuracyM: Double) -> Bool {
+            let fixAccuracy = accuracyM > 0 ? accuracyM : FixGate.unknownAccuracyM
+            let since = Double(max(0, t - at)) / 1000.0
+            if VenueVisit.distanceM(lat, lng, fixLat, fixLng) > FixGate.maxSpeedMps * since + accuracy + fixAccuracy + FixGate.marginM {
+                if run == 0 {
+                    runSince = t
+                }
+                run += 1
+                return false
+            }
+            run = 0
+            runSince = 0
+            if fixAccuracy <= accuracy + FixGate.maxSpeedMps * since {
+                at = t
+                lat = fixLat
+                lng = fixLng
+                accuracy = fixAccuracy
+            }
+            return true
+        }
+
+        func toJson() -> [String: Any] {
+            ["at": at, "lat": lat, "lng": lng, "acc": accuracy, "run": run, "run_since": runSince]
+        }
+
+        /// A gate as `toJson` kept it; none kept, the venue's fence at the session's start.
+        static func from(_ json: [String: Any]?, lat: Double, lng: Double, radiusM: Double, t: Int64) -> FixGate {
+            guard let json = json, json["at"] != nil else {
+                return FixGate(lat: lat, lng: lng, radiusM: radiusM, t: t)
+            }
+            let gate = FixGate(lat: VenueVisit.number(json, "lat", lat), lng: VenueVisit.number(json, "lng", lng),
+                               radiusM: VenueVisit.number(json, "acc", radiusM), t: VenueVisit.int64(json, "at"))
+            gate.run = Int(VenueVisit.number(json, "run", 0))
+            gate.runSince = VenueVisit.int64(json, "run_since")
+            return gate
         }
     }
 

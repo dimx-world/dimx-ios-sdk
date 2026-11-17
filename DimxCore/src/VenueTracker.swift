@@ -76,6 +76,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         let config: VenueTrackingConfig
         let reason: String
         let judge: VenueVisit.Judge
+        let gate: VenueVisit.FixGate
         let windows: VenueVisit.BleWindows
         let sampler: VenueVisit.FixSampler
         var id = ""
@@ -84,6 +85,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         var startedAt: Int64 = 0
         var fixes = 0
         var fixesSeen = 0
+        /// Fixes the gate turned away: positions the phone could not have reached.
+        var fixesImplausible = 0
         var bleWindows = 0
         var adverts = 0
         var gapsMs: Int64 = 0
@@ -95,6 +98,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         var lastPersistElapsed: Int64 = 0
         var fixesSinceHeartbeat = 0
         var staleSinceHeartbeat = 0
+        var implausibleSinceHeartbeat = 0
         var updatesSinceHeartbeat = 0
         var advertsSinceHeartbeat = 0
         var rangesSinceHeartbeat = 0
@@ -105,10 +109,11 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         var stationary = false
         var diagnostics = ""
 
-        init(config: VenueTrackingConfig, reason: String, judge: VenueVisit.Judge) {
+        init(config: VenueTrackingConfig, reason: String, judge: VenueVisit.Judge, gate: VenueVisit.FixGate) {
             self.config = config
             self.reason = reason
             self.judge = judge
+            self.gate = gate
             self.windows = VenueVisit.BleWindows(windowMs: Int64(config.sampling.bleWindowS) * 1000)
             self.sampler = VenueVisit.FixSampler(intervalMs: Int64(config.sampling.fixIntervalS) * 1000)
         }
@@ -1196,9 +1201,12 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             if VenueVisit.string(kept, "dimension") == config.dimension, FileManager.default.fileExists(atPath: file.path),
                VenueSessionFile.end(file) == nil, let judge = kept["judge"] as? [String: Any],
                now - lastRecordAt <= config.rules.resumeWindowMs {
+                let startedAt = kept["started_at"] != nil ? VenueVisit.int64(kept, "started_at") : now
                 let session = Session(config: config, reason: reason,
                                       judge: VenueVisit.Judge.from(judge, rules: config.rules, siteRadiusM: config.site.radius,
-                                                                   fenceRadiusM: config.fence.radius, venueHasBeacons: hasBeacons))
+                                                                   fenceRadiusM: config.fence.radius, venueHasBeacons: hasBeacons),
+                                      gate: VenueVisit.FixGate.from(kept["gate"] as? [String: Any], lat: config.fence.lat,
+                                                                    lng: config.fence.lng, radiusM: config.fence.radius, t: startedAt))
                 do {
                     session.writer = try VenueSessionFile.Writer(dir: dir, id: keptId)
                 } catch {
@@ -1208,9 +1216,10 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                 }
                 session.id = keptId
                 session.account = VenueVisit.string(kept, "account")
-                session.startedAt = kept["started_at"] != nil ? VenueVisit.int64(kept, "started_at") : now
+                session.startedAt = startedAt
                 session.fixes = Int(VenueVisit.number(kept, "fixes", 0))
                 session.fixesSeen = Int(VenueVisit.number(kept, "fixes_seen", 0))
+                session.fixesImplausible = Int(VenueVisit.number(kept, "fixes_implausible", 0))
                 session.bleWindows = Int(VenueVisit.number(kept, "ble_windows", 0))
                 session.adverts = Int(VenueVisit.number(kept, "adverts", 0))
                 session.gapsMs = VenueVisit.int64(kept, "gaps_ms") + max(0, now - lastRecordAt)
@@ -1239,7 +1248,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             }
             let session = Session(config: config, reason: reason,
                                   judge: VenueVisit.Judge(rules: config.rules, siteRadiusM: config.site.radius, fenceRadiusM: config.fence.radius,
-                                                          venueHasBeacons: hasBeacons, startedAt: now))
+                                                          venueHasBeacons: hasBeacons, startedAt: now),
+                                  gate: VenueVisit.FixGate(lat: config.fence.lat, lng: config.fence.lng, radiusM: config.fence.radius, t: now))
             session.id = VenueSessionFile.newId(dimension: config.dimension, now: now)
             do {
                 session.writer = try VenueSessionFile.Writer(dir: dir, id: session.id)
@@ -1448,13 +1458,34 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             return
         }
         alive(now)
-        lastFix = location
         session.fixesSeen += 1
         session.fixesSinceHeartbeat += 1
         let lat = location.coordinate.latitude
         let lng = location.coordinate.longitude
         let accuracy = location.horizontalAccuracy
         let distance = session.config.site.distance(toLat: lat, lng: lng)
+        let run = session.gate.run
+        let runSince = session.gate.runSince
+        if !session.gate.offer(now, lat: lat, lng: lng, accuracyM: accuracy) {
+            // A position the phone could not have reached: a faked satellite signal. Neither
+            // written nor evidence - only said, once a run, with how far off it put the phone.
+            session.fixesImplausible += 1
+            session.implausibleSinceHeartbeat += 1
+            session.sampler.pass()
+            if run == 0 {
+                write(event("fixes_implausible", ["d": Int(distance.rounded()), "acc": VenueVisit.Records.round(accuracy, 10)]))
+                store.log("session \(session.id): a fix \(Int((distance / 1000).rounded())) km from the venue, +-\(Int(accuracy.rounded())) m, "
+                          + "the phone could not have reached - turned away, and those after it until one can be believed")
+            }
+            apply(session.judge.onImplausibleFix(now))
+            tickIfDue()
+            return
+        }
+        if run > 0 {
+            write(event("fixes_plausible", ["n": run, "since": runSince]))
+            store.log("session \(session.id): a fix believed again after \(run) turned away over \((now - runSince) / 1000) s")
+        }
+        lastFix = location
         let fenceDistance = session.config.fence.distance(toLat: lat, lng: lng)
         let skipped: Int
         if fenceDistance > session.config.fence.radius {
@@ -1787,6 +1818,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             // Fixes passed over as older than half a minute when they came, and - with the live
             // updates - how many updates came at all, with a fix in them or not.
             "stale": session.staleSinceHeartbeat,
+            // Fixes the gate turned away: positions the phone could not have reached.
+            "implausible": session.implausibleSinceHeartbeat,
             "updates": session.updatesSinceHeartbeat,
             "adverts": session.advertsSinceHeartbeat,
             // Ranging's answers in the minute, sixty when it runs: the count the screen-off question is read from.
@@ -1808,6 +1841,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         write(record)
         session.fixesSinceHeartbeat = 0
         session.staleSinceHeartbeat = 0
+        session.implausibleSinceHeartbeat = 0
         session.updatesSinceHeartbeat = 0
         session.advertsSinceHeartbeat = 0
         session.rangesSinceHeartbeat = 0
@@ -1876,6 +1910,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             "left_at": judge.leavingSince,
             "fixes": session.fixes,
             "fixes_seen": session.fixesSeen,
+            "fixes_implausible": session.fixesImplausible,
             "ble_windows": session.bleWindows,
             "adverts": session.adverts,
             "gaps_ms": session.gapsMs,
@@ -1898,7 +1933,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             kept = !VenueSessionFile.remove(store.sessionsDirectory, session.id)
         }
         store.log("session \(session.id) ended: \(end.why) by \(end.by) after \((end.at - session.startedAt) / 1000) s - "
-                  + "\(session.fixes) of \(session.fixesSeen) fix(es), \(session.adverts) beacon report(s) in \(session.bleWindows) window(s), "
+                  + "\(session.fixes) of \(session.fixesSeen) fix(es), "
+                  + (session.fixesImplausible > 0 ? "\(session.fixesImplausible) turned away as implausible, " : "")
+                  + "\(session.adverts) beacon report(s) in \(session.bleWindows) window(s), "
                   + "\(session.gapsMs / 1000) s unrecorded, \(session.restarts) restart(s), battery \(session.batteryAtStart) -> \(batteryEnd) %, "
                   + String(format: "%.1f", Double(bytes) / 1024.0) + " KB" + (kept ? "" : ", not kept"))
 
@@ -1964,6 +2001,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             "alive_at": VenueTracker.wall(),
             "fixes": session.fixes,
             "fixes_seen": session.fixesSeen,
+            "fixes_implausible": session.fixesImplausible,
             "ble_windows": session.bleWindows,
             "adverts": session.adverts,
             "gaps_ms": session.gapsMs,
@@ -1973,6 +2011,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             "last_evidence_at": session.judge.lastEvidenceAt,
             "last_beacon_at": session.judge.lastBeaconAt,
             "judge": session.judge.toJson(),
+            "gate": session.gate.toJson(),
         ]
     }
 
