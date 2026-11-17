@@ -43,9 +43,10 @@ vertex PointOut debug_point_vertex(VertexIn in                    [[stage_in]],
     return out;
 }
 
-// The geometry held across frames (RenderLines::setSurface, addCloud): the same vertices, in the
-// piece's own frame, at the opacity it is drawn at over its vertices' own alpha - a surface's
-// triangles, or a cloud's points of the cloud's own size.
+// The geometry held across frames (RenderLines::addSurface, addCloud): its vertices' colours are
+// four bytes each (HeldVertex), which the pipeline's vertex descriptor turns into these floats; in
+// the piece's own frame, at the opacity it is drawn at over its vertices' own alpha - a surface's
+// indexed triangles, or a cloud's points of the cloud's own size.
 vertex VertexOut debug_held_vertex(VertexIn in                     [[stage_in]],
                                    constant float4x4 &mvpMat       [[buffer(1)]],
                                    constant float &opacity         [[buffer(2)]])

@@ -52,15 +52,16 @@ float Renderer_dotSize(bool debugBuffer);
 // alpha already (an SVG tile) and its texture's native id; false past the list.
 long Renderer_quadsCount(bool debugBuffer);
 bool Renderer_quad(bool debugBuffer, long index, float* corners, float* uv, float* alpha, bool* premultiplied, long* textureId);
-// The geometry held across frames (RenderLines::setSurface, addCloud): the surface - triangles,
-// three vertices each - and this frame's clouds - a point each - as their vertices (DebugVertex:
-// xyz rgba, 7 floats), their identity (DebugMeshData::id - the same id is the same vertices,
-// so the pass uploads a piece once and draws what it holds), where each stands (16 floats,
+// The geometry held across frames (RenderLines::addSurface, addCloud): this frame's pieces, each
+// a surface - its vertices and its triangles, three uint32 indices each - or a cloud - its
+// vertices, a point each, and no indices. A vertex is HeldVertex: xyz as floats and rgba as bytes,
+// 16 bytes. With them a piece's identity (DebugMeshData::id - the same id is the same geometry,
+// so the pass uploads a piece once and draws what it holds), where it stands (16 floats,
 // column-major), the opacity it is drawn at and, for a cloud, its points' size in pixels. False
-// when there is no surface, or past the clouds.
-bool Renderer_heldSurface(const void** data, long* count, long* id, float* transform, float* opacity);
-long Renderer_heldCloudsCount();
-bool Renderer_heldCloud(long index, const void** data, long* count, long* id, float* transform, float* pointPixels, float* opacity);
+// past the pieces.
+long Renderer_heldCount();
+bool Renderer_held(long index, bool* points, const void** vertices, long* vertexCount, const void** indices, long* indexCount,
+                   long* id, float* transform, float* pointPixels, float* opacity);
 void Renderer_drawPoint(bool debugBuffer, const void* posPtr, float worldSize, const void* colPtr);
 void Renderer_drawLine(bool debugBuffer, const void* pos1Ptr, const void* col1Ptr, const void* pos2Ptr, const void* col2Ptr);
 void Renderer_drawLineRect(bool debugBuffer, float width, float height, const void* transformPtr, const void* colPtr);

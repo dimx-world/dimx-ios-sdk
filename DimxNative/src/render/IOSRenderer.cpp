@@ -113,42 +113,31 @@ bool Renderer_quad(bool debugBuffer, long index, float* corners, float* uv, floa
     return true;
 }
 
-bool Renderer_heldSurface(const void** data, long* count, long* id, float* transform, float* opacity)
+long Renderer_heldCount()
 {
-    const RenderLines& lines = g_renderer().lines();
-    const std::shared_ptr<const DebugMeshData>& surface = lines.surface();
-    if (!surface || surface->vertices.empty()) {
-        return false;
-    }
-    *data = surface->vertices.data();
-    *count = static_cast<long>(surface->vertices.size());
-    *id = static_cast<long>(surface->id);
-    memcpy(transform, &lines.surfaceTransform(), sizeof(Mat4));
-    *opacity = lines.surfaceOpacity();
-    return true;
+    return static_cast<long>(g_renderer().lines().held().size());
 }
 
-long Renderer_heldCloudsCount()
+bool Renderer_held(long index, bool* points, const void** vertices, long* vertexCount, const void** indices, long* indexCount,
+                   long* id, float* transform, float* pointPixels, float* opacity)
 {
-    return static_cast<long>(g_renderer().lines().clouds().size());
-}
-
-bool Renderer_heldCloud(long index, const void** data, long* count, long* id, float* transform, float* pointPixels, float* opacity)
-{
-    const std::vector<HeldCloud>& clouds = g_renderer().lines().clouds();
-    if (index < 0 || index >= static_cast<long>(clouds.size())) {
+    const std::vector<HeldPiece>& held = g_renderer().lines().held();
+    if (index < 0 || index >= static_cast<long>(held.size())) {
         return false;
     }
-    const HeldCloud& cloud = clouds[index];
-    if (!cloud.data || cloud.data->vertices.empty()) {
+    const HeldPiece& piece = held[index];
+    if (!piece.data || piece.data->vertices.empty()) {
         return false;
     }
-    *data = cloud.data->vertices.data();
-    *count = static_cast<long>(cloud.data->vertices.size());
-    *id = static_cast<long>(cloud.data->id);
-    memcpy(transform, &cloud.transform, sizeof(Mat4));
-    *pointPixels = cloud.pointPixels;
-    *opacity = cloud.opacity;
+    *points = piece.points;
+    *vertices = piece.data->vertices.data();
+    *vertexCount = static_cast<long>(piece.data->vertices.size());
+    *indices = piece.points ? nullptr : piece.data->indices.data();
+    *indexCount = piece.points ? 0 : static_cast<long>(piece.data->indices.size());
+    *id = static_cast<long>(piece.data->id);
+    memcpy(transform, &piece.transform, sizeof(Mat4));
+    *pointPixels = piece.pointPixels;
+    *opacity = piece.opacity;
     return true;
 }
 

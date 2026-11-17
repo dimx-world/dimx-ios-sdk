@@ -25,6 +25,7 @@ class DebugPass
     static let vertexSize = MemoryLayout<Float>.stride * componentsPerVertex
     static let matrixSize = MemoryLayout<Float>.stride * 16
     static let quadVertexSize = MemoryLayout<Float>.stride * 5 // xyz + uv
+    static let heldVertexSize = MemoryLayout<Float>.stride * 3 + 4 // xyz + rgba as bytes (HeldVertex)
     static let maxQuads = 64
 
     // One list's buffer, made when the list first has something in it.
@@ -47,13 +48,21 @@ class DebugPass
     var frames: [FrameBuffers] = []
     var frameIndex = 0
 
-    // A held piece's buffer, by its id.
+    // A held piece's buffers, by its id: its vertices, and a surface's indices - written once, as
+    // it is first handed over, and never again.
     final class HeldBuffer {
-        let buffer: MTLBuffer
-        let count: Int
-        init(_ buffer: MTLBuffer, _ count: Int) { self.buffer = buffer; self.count = count }
+        let vertices: MTLBuffer
+        let indices: MTLBuffer?
+        let count: Int          // a surface's indices, a cloud's vertices
+        init(_ vertices: MTLBuffer, _ indices: MTLBuffer?, _ count: Int) {
+            self.vertices = vertices
+            self.indices = indices
+            self.count = count
+        }
     }
     var held: [Int: HeldBuffer] = [:]
+    // The pieces whose buffers could not be made, said once each.
+    var heldRefused = Set<Int>()
 
     var pipelineState: MTLRenderPipelineState!
     var pointPipelineState: MTLRenderPipelineState!
@@ -107,8 +116,19 @@ class DebugPass
         do { try pointPipelineState = renderer.device.makeRenderPipelineState(descriptor: pipelineStateDescriptor) }
         catch let error { Logger.error("Failed to create debug points pipeline state, error \(error)") }
 
-        // The held geometry: the same vertices in the piece's own frame, at its opacity - a
-        // surface's triangles, a cloud's points.
+        // The held geometry: its vertices (HeldVertex) a position and a colour of four bytes, in the
+        // piece's own frame, at its opacity - a surface's indexed triangles, a cloud's points.
+        let heldDescriptor = MTLVertexDescriptor()
+        heldDescriptor.attributes[0].format = .float3
+        heldDescriptor.attributes[0].offset = 0
+        heldDescriptor.attributes[0].bufferIndex = 0
+        heldDescriptor.attributes[1].format = .uchar4Normalized
+        heldDescriptor.attributes[1].offset = 12
+        heldDescriptor.attributes[1].bufferIndex = 0
+        heldDescriptor.layouts[0].stride = DebugPass.heldVertexSize
+        heldDescriptor.layouts[0].stepRate = 1
+        heldDescriptor.layouts[0].stepFunction = .perVertex
+        pipelineStateDescriptor.vertexDescriptor = heldDescriptor
         pipelineStateDescriptor.label = "DebugHeldPipeline"
         pipelineStateDescriptor.vertexFunction = defaultLibrary.makeFunction(name: "debug_held_vertex")!
         do { try heldPipelineState = renderer.device.makeRenderPipelineState(descriptor: pipelineStateDescriptor) }
@@ -177,16 +197,27 @@ class DebugPass
         return n
     }
 
-    // A held piece's buffer: the one kept under its id, else made from its vertices now.
-    private func heldBuffer(_ id: Int, _ data: UnsafeRawPointer, _ count: Int, _ renderer: Renderer, _ seen: inout Set<Int>) -> HeldBuffer? {
+    // A held piece's buffers: the ones kept under its id, else made from its geometry now.
+    private func heldBuffer(_ id: Int, _ vertices: UnsafeRawPointer, _ vertexCount: Int, _ indices: UnsafeRawPointer?,
+                            _ indexCount: Int, _ renderer: Renderer, _ seen: inout Set<Int>) -> HeldBuffer? {
         seen.insert(id)
         if let have = held[id] {
             return have
         }
-        guard count > 0, let buffer = renderer.device.makeBuffer(bytes: data, length: count * DebugPass.vertexSize, options: []) else {
+        if vertexCount <= 0 || heldRefused.contains(id) {
             return nil
         }
-        let piece = HeldBuffer(buffer, count)
+        var indexBuffer: MTLBuffer? = nil
+        if let inds = indices, indexCount > 0 {
+            indexBuffer = renderer.device.makeBuffer(bytes: inds, length: indexCount * MemoryLayout<UInt32>.stride, options: [])
+        }
+        guard let vertexBuffer = renderer.device.makeBuffer(bytes: vertices, length: vertexCount * DebugPass.heldVertexSize, options: []),
+              indices == nil || indexBuffer != nil else {
+            Logger.error("DebugPass: the buffers of a held piece of \(vertexCount) vertices and \(indexCount) indices could not be made - not drawn")
+            heldRefused.insert(id)
+            return nil
+        }
+        let piece = HeldBuffer(vertexBuffer, indexBuffer, indexBuffer != nil ? indexCount : vertexCount)
         held[id] = piece
         return piece
     }
@@ -200,47 +231,53 @@ class DebugPass
         return frameContext.viewProjectionMat * model
     }
 
-    // The held geometry: the surface, then the clouds, each drawn from the buffer kept under its
-    // id; what no frame names any more goes.
+    // The held geometry: the surfaces, then the clouds, each drawn from the buffers kept under its
+    // id; what the frame does not name goes.
     private func renderHeld(_ encoder: MTLRenderCommandEncoder, _ frameContext: FrameContext, _ renderer: Renderer) -> Bool {
         var seen = Set<Int>()
-        var data: UnsafeRawPointer? = nil
-        var count = 0
-        var id = 0
-        var transform = [Float](repeating: 0, count: 16)
-        var opacity: Float = 1
-        var pointPixels: Float = 1
         var drew = false
-        if Renderer_heldSurface(&data, &count, &id, &transform, &opacity), let bytes = data,
-           let piece = heldBuffer(id, bytes, count, renderer, &seen) {
-            encoder.setRenderPipelineState(heldPipelineState)
-            var mvp = pieceMvp(frameContext, transform)
-            encoder.setVertexBytes(&mvp, length: DebugPass.matrixSize, index: 1)
-            encoder.setVertexBytes(&opacity, length: MemoryLayout<Float>.stride, index: 2)
-            encoder.setVertexBuffer(piece.buffer, offset: 0, index: 0)
-            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: piece.count)
-            drew = true
-        }
-        let clouds = Renderer_heldCloudsCount()
-        if clouds > 0 {
-            encoder.setRenderPipelineState(heldPointPipelineState)
-            for i in 0..<clouds {
-                data = nil
-                guard Renderer_heldCloud(i, &data, &count, &id, &transform, &pointPixels, &opacity), let bytes = data,
-                      let piece = heldBuffer(id, bytes, count, renderer, &seen) else {
+        let count = Renderer_heldCount()
+        for pass in 0..<2 {
+            let wantPoints = pass == 1
+            var stateSet = false
+            for i in 0..<count {
+                var points = false
+                var vertices: UnsafeRawPointer? = nil
+                var vertexCount = 0
+                var indices: UnsafeRawPointer? = nil
+                var indexCount = 0
+                var id = 0
+                var transform = [Float](repeating: 0, count: 16)
+                var pointPixels: Float = 1
+                var opacity: Float = 1
+                guard Renderer_held(i, &points, &vertices, &vertexCount, &indices, &indexCount, &id, &transform, &pointPixels, &opacity),
+                      points == wantPoints, let v = vertices,
+                      let piece = heldBuffer(id, v, vertexCount, points ? nil : indices, points ? 0 : indexCount, renderer, &seen) else {
                     continue
+                }
+                if !stateSet {
+                    encoder.setRenderPipelineState(points ? heldPointPipelineState : heldPipelineState)
+                    stateSet = true
                 }
                 var mvp = pieceMvp(frameContext, transform)
                 encoder.setVertexBytes(&mvp, length: DebugPass.matrixSize, index: 1)
                 encoder.setVertexBytes(&opacity, length: MemoryLayout<Float>.stride, index: 2)
-                encoder.setVertexBytes(&pointPixels, length: MemoryLayout<Float>.stride, index: 3)
-                encoder.setVertexBuffer(piece.buffer, offset: 0, index: 0)
-                encoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: piece.count)
+                encoder.setVertexBuffer(piece.vertices, offset: 0, index: 0)
+                if points {
+                    encoder.setVertexBytes(&pointPixels, length: MemoryLayout<Float>.stride, index: 3)
+                    encoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: piece.count)
+                } else if let indexBuffer = piece.indices {
+                    encoder.drawIndexedPrimitives(type: .triangle, indexCount: piece.count, indexType: .uint32,
+                                                  indexBuffer: indexBuffer, indexBufferOffset: 0)
+                }
                 drew = true
             }
         }
         if held.count != seen.count {
             held = held.filter { seen.contains($0.key) }
+        }
+        if !heldRefused.isEmpty {
+            heldRefused = heldRefused.intersection(seen)
         }
         return drew
     }
