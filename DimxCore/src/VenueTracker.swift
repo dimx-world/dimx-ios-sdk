@@ -17,17 +17,24 @@ import UserNotifications
 ///    what iOS lets go on once the app leaves the screen and the phone is locked, under "While
 ///    Using" as under "Always", with the system's own indicator on the status bar - and, the
 ///    updates going on while the phone is still, what keeps the app from being suspended under a
-///    visitor who stands. A new session is never begun from the background.
+///    visitor who stands.
 /// 2. A session a dead process left is taken up again by the next one - the app opened, or
 ///    relaunched by iOS for the location updates or a region - while it is still the visitor's
 ///    choice, the location is still allowed and the recording stopped less than the venue's
 ///    resume window ago; the stretch in between is written as a gap. Past that it is closed as
 ///    interrupted, with nothing claimed after its last record.
 /// 3. For a visitor who also allowed location all the time and asked for it, a circular region
-///    round the venue and a beacon region for its beacons wake the app as the phone arrives. In
-///    the seconds iOS gives it there the arrival is noted - when, by what, one fix, the beacons
-///    heard - for the session's header, and a kept session is taken up; the fence's exit goes to
-///    the judge of a running session and closes a kept one nothing is recording.
+///    round the venue and a beacon region for its beacons wake the app as the phone arrives, and
+///    the session begins there, as Android's does at its fence (since 2026-11-20): the arrival
+///    noted for its header, the updates started under a background task for the seconds iOS
+///    gives a region event. Apple promises to keep an app running for its updates only when they
+///    were started in front, so the session's file says what iOS did - heartbeats with `bg_left`
+///    -1 while it holds, a gap where it suspended the app - and a notice is kept due a few minutes
+///    ahead, moved on at every heartbeat: shown only if iOS stopped the app, its tap opening the
+///    venue. The app opened, the updates are started again in front and the notice goes. Where
+///    the session cannot begin, the seconds of the event note the arrival - one fix, the beacons
+///    heard - for the session the opening begins. The fence's exit goes to the judge of a running
+///    session and closes a kept one nothing is recording.
 /// 4. The venue's beacons are ranged for the length of the session. Ranging answers once a
 ///    second while it runs, and the answers are what is written: a window exists only where
 ///    ranging answered, and says whether the app was in front and the phone unlocked. Whether
@@ -68,6 +75,10 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
     private static let rangingSilentMs: Int64 = 10_000
     /// What a region event in the background is given to note the arrival, of the seconds iOS allows.
     private static let arrivalSampleS: TimeInterval = 8
+    /// The notice of a session not held in front is due this long after the last sign the
+    /// tracker was running: three heartbeats, so only a stopped app misses them all.
+    private static let noticeAfterS: TimeInterval = 180
+    static let noticeIdentifier = "dimx-venue-notice"
     /// The key of the app's NSLocationTemporaryUsageDescriptionDictionary a visitor on approximate location is asked under.
     private static let purposeKey = "VenueTracking"
 
@@ -108,6 +119,16 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         /// Core Location's word that the phone is not moving, which is when it stops sending fixes.
         var stationary = false
         var diagnostics = ""
+        /// The updates were started with the app in front in this process: what iOS keeps running
+        /// behind other apps. A session begun or taken up behind the visitor is not, until the app
+        /// is opened, and keeps its notice due meanwhile.
+        var heldInFront = false
+        /// When the notice set last falls due (wall ms); 0 for none set in this process.
+        var noticeDueAt: Int64 = 0
+        /// A notice fell due while nothing ran, and was shown where notifications are allowed: once a session.
+        var noticeShown = false
+        /// Notifications refused it: said once, not asked again.
+        var noticeRefused = false
 
         init(config: VenueTrackingConfig, reason: String, judge: VenueVisit.Judge, gate: VenueVisit.FixGate) {
             self.config = config
@@ -172,6 +193,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
     // A passive arrival being noted
     private var arrivalSample: ArrivalSample?
     private var arrivalTimer: Timer?
+    /// The background task a session begun at a region event holds for the seconds iOS gives it,
+    /// while its updates start and the first fixes come in.
+    private var arrivalTask = UIBackgroundTaskIdentifier.invalid
 
     /// The page hears every change of the standing through this, as `statusJson()`.
     var pageListener: ((String) -> Void)?
@@ -358,9 +382,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         var root: [String: Any] = [
             "available": VenueTrackingStore.hostEnabled(desired),
             "platform": "ios",
-            // What "start by itself" comes to here: the arrival is noticed and noted, and the
-            // recording begins when the app is opened. On Android the session itself starts.
-            "auto_start_mode": "arrival",
+            // What "start by itself" comes to: the session begins where the region woke the app,
+            // as on Android (until 2026-11-20 "arrival": noted, and recorded from the opening).
+            "auto_start_mode": "session",
             "permissions": [
                 "location": location,
                 "precise": location && precise,
@@ -468,9 +492,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
 
     /// Debug builds: `enable`, `enable_auto` and `disable` are the visitor's choice for the first
     /// configured venue, `start` begins a session there with no evidence asked (the judge still
-    /// wants some), `stop` ends the running one, `status` logs the standing. `account` is whose
-    /// visits an `enable` makes them - what the sessions carry and are sent under; a session of
-    /// the default goes to no real account.
+    /// wants some), `stop` ends the running one, `status` logs the standing, `notices` the notice
+    /// due and the one shown. `account` is whose visits an `enable` makes them - what the sessions
+    /// carry and are sent under; a session of the default goes to no real account.
     public func selfTest(_ what: String, account: String = "self-test") {
         let desired = store.desired()
         let dimension = VenueTrackingStore.dimensions(desired).first ?? ""
@@ -489,6 +513,20 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             endByRequest("stopped", "test")
         case "status":
             store.log("self-test status: " + statusJson())
+        case "notices":
+            let center = UNUserNotificationCenter.current()
+            center.getPendingNotificationRequests { [weak self] pending in
+                center.getDeliveredNotifications { delivered in
+                    let due = pending.filter { $0.identifier == VenueTracker.noticeIdentifier }.compactMap {
+                        ($0.trigger as? UNTimeIntervalNotificationTrigger)?.nextTriggerDate()
+                    }
+                    let shown = delivered.filter { $0.request.identifier == VenueTracker.noticeIdentifier }
+                    DispatchQueue.main.async {
+                        self?.store.log("self-test notices: due " + (due.first.map { "\($0)" } ?? "none")
+                                        + ", shown " + (shown.first.map { "\($0.date): \($0.request.content.title) - \($0.request.content.body)" } ?? "none"))
+                    }
+                }
+            }
         default:
             store.log("self-test: unknown [\(what)]")
         }
@@ -805,8 +843,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
     }
 
     /// A venue's fence or its beacon region was crossed. A running session of that venue takes it
-    /// as evidence; otherwise an entry is an arrival - noted, and a kept session taken up - and
-    /// the fence's exit closes what nothing is recording.
+    /// as evidence; otherwise an entry is an arrival - noted, a kept session taken up, and behind
+    /// the visitor a session begun (beginAtArrival) - and the fence's exit closes what nothing is
+    /// recording.
     private func regionEvent(_ dimension: String, beacons: Bool, entered: Bool) {
         let desired = store.desired()
         var state = store.state()
@@ -841,7 +880,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                 if session == nil {
                     if appActive {
                         look()
-                    } else {
+                    } else if !beginAtArrival(config, beacons: beacons) {
                         sampleArrival(config)
                     }
                 }
@@ -866,9 +905,49 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    /// The seconds iOS gives a region event in the background: one fix and the venue's beacons
-    /// heard meanwhile, kept with the arrival for the header of the session the visitor's opening
-    /// of the app begins. Nothing goes on past them.
+    /// With the location allowed all the time, the session begins where iOS woke the app: at the
+    /// venue's fence (`geofence`, as Android's service starts there), or among its beacons
+    /// (`beacons`, which are the venue itself - the judge has them as its first evidence). The
+    /// updates start under a background task, held for the seconds iOS gives a region event while
+    /// the first fixes come in; past them only the updates can keep the app running, which Apple
+    /// promises for updates started in front alone - the file says whether iOS did (`bg_left` in
+    /// the heartbeats, `background_task_end`), and the notice (setNotice) is what is left if it
+    /// did not. False when no session began.
+    private func beginAtArrival(_ config: VenueTrackingConfig, beacons: Bool) -> Bool {
+        guard let manager = manager, manager.authorizationStatus == .authorizedAlways else { return false }
+        holdArrival()
+        guard begin(config, reason: beacons ? "beacons" : "geofence", fix: nil, beacon: beacons) else {
+            releaseArrival()
+            return false
+        }
+        return true
+    }
+
+    private func holdArrival() {
+        guard arrivalTask == .invalid else { return }
+        arrivalTask = UIApplication.shared.beginBackgroundTask(withName: "dimx-venue-session") { [weak self] in
+            self?.releaseArrival()
+        }
+    }
+
+    /// The background task let go - iOS's time for it up, the app in front or the session over -
+    /// and what the app has left behind it said: -1, no limit, is the updates holding it.
+    private func releaseArrival() {
+        guard arrivalTask != .invalid else { return }
+        let task = arrivalTask
+        arrivalTask = .invalid
+        UIApplication.shared.endBackgroundTask(task)
+        if session != nil && !appActive {
+            let left = UIApplication.shared.backgroundTimeRemaining
+            write(event("background_task_end", ["bg_left": left > 100_000 ? -1 : Int(left.rounded())]))
+            flush()
+        }
+    }
+
+    /// The seconds iOS gives a region event in the background, where no session could begin
+    /// there (beginAtArrival): one fix and the venue's beacons heard meanwhile, kept with the
+    /// arrival for the header of the session the visitor's opening of the app begins. Nothing
+    /// goes on past them.
     private func sampleArrival(_ config: VenueTrackingConfig) {
         guard let manager = manager, arrivalSample == nil else { return }
         let sample = ArrivalSample(config: config)
@@ -950,12 +1029,15 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
 
     private func appBecameActive() {
         let was = appActive
-        if session != nil {
+        if let session = session {
             conditionChanged { appActive = true }
             if !was {
                 write(event("app_front"))
-                flush()
             }
+            if !session.heldInFront {
+                holdInFront(session)
+            }
+            flush()
         } else {
             appActive = true
             looks = 0
@@ -969,6 +1051,20 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         notifyChanged()
         // The app in front is a network as likely as it gets: what waits to be sent is tried now.
         VenueUploader.shared.kick("app in front", activeId: activeSessionId())
+    }
+
+    /// The app came to the front under a session begun or taken up behind the visitor: its updates
+    /// are started again here, where iOS keeps them running behind other apps - from iOS 17 under
+    /// a background activity session, which only the front may begin - and the notice is not
+    /// wanted any more.
+    private func holdInFront(_ session: Session) {
+        _ = noticeFellDue(session, VenueTracker.wall())
+        stopFixes()
+        startFixes(activitySession: true)
+        session.heldInFront = true
+        releaseArrival()
+        clearNotice()
+        store.log("session \(session.id): its updates started again with the app in front")
     }
 
     private func appResignedActive() {
@@ -1225,6 +1321,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                 session.gapsMs = VenueVisit.int64(kept, "gaps_ms") + max(0, now - lastRecordAt)
                 session.restarts = Int(VenueVisit.number(kept, "restarts", 0)) + 1
                 session.batteryAtStart = Int(VenueVisit.number(kept, "battery_at_start", -1))
+                session.noticeShown = VenueVisit.bool(kept, "notice_shown")
                 session.judge.onListening(false)
                 session.judge.resumed(now)
                 self.session = session
@@ -1239,10 +1336,13 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
                 store.writeState(state)
             }
         }
+        let restored = taken != nil
         if taken == nil {
-            // iOS lets a background location session begin in front of its user, and nowhere else.
-            guard appActive || reason == "test" else {
-                store.log("no new session of \(config.name) (\(reason)): one begins with the app in front")
+            // A new session begins in front of the visitor, or - for an app allowed the location
+            // all the time - where a region of the venue woke it (beginAtArrival).
+            let atArrival = (reason == "geofence" || reason == "beacons") && status == .authorizedAlways
+            guard appActive || atArrival || reason == "test" else {
+                store.log("no new session of \(config.name) (\(reason)): one begins with the app in front, or at a region with the location allowed all the time")
                 UIDevice.current.isBatteryMonitoringEnabled = monitoringWas
                 return false
             }
@@ -1271,8 +1371,15 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         batteryMonitoringWas = monitoringWas
         stopLooking()
         session.lastHeartbeatElapsed = VenueTracker.elapsed()
-        startFixes()
+        session.heldInFront = appActive
+        // A background activity session begins where iOS allows one: in front, or as a process iOS
+        // relaunched takes up the session it held. One begun behind the visitor has none until the
+        // app is opened (holdInFront).
+        startFixes(activitySession: appActive || restored)
         startBeacons()
+        if !session.heldInFront {
+            setNotice(session)
+        }
         if beacon {
             apply(session.judge.onBeacon(now))
         }
@@ -1343,19 +1450,22 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
     /// stop for a still phone, and then nothing was recorded, heard or sent for as long as the
     /// visitor stood (a quarter of an iPhone's visit on 2026-11-16, up to fourteen minutes at a
     /// time). From iOS 17 a CLBackgroundActivitySession - first, so that a process iOS relaunched
-    /// in the background may start updates - and the live updates run beside them: what has iOS
-    /// relaunch the app when the process is killed under a session, and Core Location's word on
-    /// whether the phone is still and why fixes are not coming. Their locations are the same Core
-    /// Location's, so the standard updates alone carry the fixes.
-    private func startFixes() {
+    /// in the background may start updates, and only where `activitySession` says iOS lets one
+    /// begin - and the live updates run beside them: what has iOS relaunch the app when the
+    /// process is killed under a session, and Core Location's word on whether the phone is still
+    /// and why fixes are not coming. Their locations are the same Core Location's, so the
+    /// standard updates alone carry the fixes.
+    private func startFixes(activitySession: Bool) {
         guard let manager = manager, session != nil else { return }
         let background = VenueTracker.hasLocationBackgroundMode()
         if !background {
             store.log("no location background mode in the app's Info.plist: the session lives only while the app is in front")
         }
         streamGeneration += 1
-        if #available(iOS 17.0, *), background {
+        var activity = false
+        if #available(iOS 17.0, *), background, activitySession {
             backgroundSession = CLBackgroundActivitySession()
+            activity = true
         }
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = kCLDistanceFilterNone
@@ -1383,7 +1493,8 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             }
         }
         streamName = "standard"
-        write(event("fix_mode", ["mode": streamName, "background": background]))
+        // `front`: started with the app in front, which is what Apple promises to keep running.
+        write(event("fix_mode", ["mode": streamName, "background": background, "front": appActive, "activity_session": activity]))
     }
 
     private func stopFixes() {
@@ -1801,6 +1912,12 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             session.sampler.reset()
             store.log("nothing was delivered for \(gap / 1000) s - the app was suspended, or the phone held the samples back"
                       + (session.stationary ? " (it had been reported stationary)" : ""))
+            if session.judge.state == VenueVisit.Judge.candidate {
+                // Nothing could confirm the visit while nothing was delivered - a session begun at a
+                // region and suspended by iOS before the evidence came: its time to be confirmed
+                // counts from here, as for a session taken up again.
+                session.judge.resumed(now)
+            }
         }
         session.lastEventElapsed = elapsed
         session.lastEventAt = now
@@ -1845,6 +1962,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         session.updatesSinceHeartbeat = 0
         session.advertsSinceHeartbeat = 0
         session.rangesSinceHeartbeat = 0
+        if !session.heldInFront {
+            setNotice(session)   // the tracker runs: moved on
+        }
 
         // What the visitor took away under a running session ends it, with the reason.
         let status = manager.authorizationStatus
@@ -1859,6 +1979,72 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             } else if available && rangingUuid == nil {
                 startBeacons()
             }
+        }
+    }
+
+    // MARK: - The notice
+
+    /// The notice of a session begun or taken up behind the visitor: due `noticeAfterS` from now
+    /// and set again at every heartbeat while the session is not held in front, so it is shown
+    /// only when iOS stopped the app under the session and nothing ran to move it on. The venue's
+    /// name over the line Android's notification carries, silent as Android's is; its tap opens
+    /// the venue through the host's notification delegate (ParkingWatcher opens a notification's
+    /// app url), and the app opened, the session is held in front and the notice taken away
+    /// (holdInFront). Once a session: one that fell due while nothing ran was shown, and is not
+    /// set again.
+    private func setNotice(_ session: Session) {
+        guard !session.heldInFront, !session.noticeShown, !session.noticeRefused else { return }
+        let now = VenueTracker.wall()
+        if noticeFellDue(session, now) {
+            return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = session.config.name
+        content.body = VenueTracker.noticeText()
+        content.threadIdentifier = "dimx-venue"
+        content.userInfo = [ParkingWatcher.appUrlKey: session.config.appUrl]
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: VenueTracker.noticeAfterS, repeats: false)
+        // The same identifier: the notice set before is replaced, never added to.
+        let request = UNNotificationRequest(identifier: VenueTracker.noticeIdentifier, content: content, trigger: trigger)
+        let id = session.id
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
+            guard let error = error else { return }
+            DispatchQueue.main.async {
+                guard let self = self, let session = self.session, session.id == id, !session.noticeRefused else { return }
+                session.noticeRefused = true
+                self.store.log("session \(id): no notice - \(error.localizedDescription)")
+            }
+        }
+        if session.noticeDueAt == 0 {
+            store.log("session \(session.id) runs behind the visitor: a notice is due in \(Int(VenueTracker.noticeAfterS)) s, moved on at every heartbeat")
+        }
+        session.noticeDueAt = now + Int64(VenueTracker.noticeAfterS * 1000)
+    }
+
+    /// Whether the notice set fell due while nothing ran to move it on - shown, then, where
+    /// notifications allow it - which the file is told once (`notice_shown`), at the next heartbeat
+    /// or the opening, whichever comes first.
+    private func noticeFellDue(_ session: Session, _ now: Int64) -> Bool {
+        guard !session.noticeShown, !session.noticeRefused, session.noticeDueAt > 0, now >= session.noticeDueAt else { return false }
+        session.noticeShown = true
+        write(event("notice_shown", ["due_at": session.noticeDueAt]))
+        store.log("session \(session.id): its notice fell due \((now - session.noticeDueAt) / 1000) s ago with nothing running to move it on - shown, and not set again")
+        return true
+    }
+
+    /// The notice is not wanted: neither due nor shown.
+    private func clearNotice() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [VenueTracker.noticeIdentifier])
+        center.removeDeliveredNotifications(withIdentifiers: [VenueTracker.noticeIdentifier])
+    }
+
+    /// The notice's line: Android's notification's (`dimx_venue_text`), in its languages; English otherwise.
+    private static func noticeText() -> String {
+        switch String(Locale.preferredLanguages.first?.prefix(2) ?? "en") {
+        case "uk": return "Відкрийте цифровий світ навколо себе"
+        case "ru": return "Откройте цифровой мир вокруг себя"
+        default: return "Explore the digital world around you"
         }
     }
 
@@ -1892,6 +2078,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         guard let session = session else { return }
         tickTimer?.invalidate()
         tickTimer = nil
+        clearNotice()
         stopFixes()
         if rangingUuid != nil || session.windows.listening {
             stopBeacons(end.why)
@@ -1944,7 +2131,9 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
         state["last_session"] = [
             "id": session.id, "dimension": session.config.dimension, "why": end.why, "by": end.by, "at": end.at, "kept": kept,
         ] as [String: Any]
-        if end.why == "departed",
+        // The visit is over - or the arrival that began this session was none - and its note with it.
+        let beganAtArrival = session.reason == "geofence" || session.reason == "beacons"
+        if end.why == "departed" || (end.why == "not_confirmed" && beganAtArrival),
            VenueVisit.string((state["arrival"] as? [String: Any]) ?? [:], "dimension") == session.config.dimension {
             state.removeValue(forKey: "arrival")
         }
@@ -1952,6 +2141,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
 
         self.session = nil
         bleStatus = "none"
+        releaseArrival()
         notifyChanged()
         if kept {
             // The visit is over and its file whole: sent now, while iOS still lets the process run.
@@ -2010,6 +2200,7 @@ public final class VenueTracker: NSObject, CLLocationManagerDelegate {
             "ble": bleStatus,
             "last_evidence_at": session.judge.lastEvidenceAt,
             "last_beacon_at": session.judge.lastBeaconAt,
+            "notice_shown": session.noticeShown,
             "judge": session.judge.toJson(),
             "gate": session.gate.toJson(),
         ]

@@ -74,6 +74,7 @@ final class VenueTrackingConfig: CustomStringConvertible {
     static let minFenceRadius = 100.0
     static let maxFenceRadius = 5000.0
     static let minSiteRadius = 20.0
+    private static let appUrlPrefix = "https://go.dimx.world/?dim="
 
     let dimension: String
     let name: String
@@ -105,6 +106,9 @@ final class VenueTrackingConfig: CustomStringConvertible {
         self.sampling = sampling
         self.rules = rules
     }
+
+    /// What the tap on the visit's notice opens: the dimension.
+    var appUrl: String { VenueTrackingConfig.appUrlPrefix + dimension }
 
     /// The identifier of the circular region this venue registers, and of its beacon region.
     var fenceIdentifier: String { VenueTracker.fencePrefix + dimension }

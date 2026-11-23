@@ -73,7 +73,8 @@ enum VenueVisit {
 
     /// How long the judge waits before it concludes; a venue's config may say otherwise, in seconds.
     struct Rules {
-        /// A candidate nothing confirmed for this long was not a visit.
+        /// A candidate nothing confirmed for this long - since the start, or since the recording
+        /// was taken up again after nothing was recorded - was not a visit.
         var arrivalConfirmMs: Int64 = 10 * 60_000
         /// An exit has to stand this long, with no beacon heard and no fix inside, to be the departure.
         var exitConfirmMs: Int64 = 3 * 60_000
@@ -178,7 +179,8 @@ enum VenueVisit {
 
         var state = Judge.candidate
         var startedAt: Int64
-        /// From when silence counts: the start, or the last time the recording was taken up again.
+        /// From when silence counts, and a candidate's time to be confirmed: the start, or the last
+        /// time the recording was taken up again.
         var liveSince: Int64
         var confirmedAt: Int64 = 0
         var confirmedBy = ""
@@ -225,7 +227,8 @@ enum VenueVisit {
             listening = nowListening
         }
 
-        /// The recording was taken up again after a gap: silence is counted from now.
+        /// The recording was taken up again after a gap: silence is counted from now, and so is a
+        /// candidate's time to be confirmed - nothing could confirm it while nothing was recorded.
         func resumed(_ t: Int64) {
             liveSince = t
             // Whatever the phone did meanwhile, the fix from before no longer says where it is.
@@ -360,7 +363,7 @@ enum VenueVisit {
             if t - startedAt >= rules.maxSessionMs {
                 return end(t, "expired", "timeout")
             }
-            if state == Judge.candidate && t - startedAt >= rules.arrivalConfirmMs {
+            if state == Judge.candidate && t - liveSince >= rules.arrivalConfirmMs {
                 return end(t, "not_confirmed", "timeout")
             }
             if state == Judge.inside, let leaving = maybeLeave(t) {
