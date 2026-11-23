@@ -4,13 +4,25 @@ import Foundation
 import UIKit
 
 /// Ranges the iBeacon UUIDs the engine registers and hands every observation to
-/// the engine. Three things decide whether ranging is actually running: the
-/// engine has registered a UUID (`register`), location is authorised with
-/// *precise* accuracy - ranging delivers nothing under approximate location, so
-/// a reduced grant is answered with the one-time full-accuracy prompt - and
-/// ranging is available, which CoreLocation withdraws while Bluetooth is off.
-/// A start CoreLocation refuses or fails is retried with backoff, and re-tried
-/// at once when authorisation changes or the app returns to the foreground.
+/// the engine. Four things decide whether ranging is actually running: the
+/// engine has registered a UUID (`register`), the app is not in the background,
+/// location is authorised with *precise* accuracy - ranging delivers nothing
+/// under approximate location, so a reduced grant is answered with the one-time
+/// full-accuracy prompt - and ranging is available, which CoreLocation withdraws
+/// while Bluetooth is off. A start CoreLocation refuses or fails is retried with
+/// backoff, and re-tried at once when authorisation changes or the app returns
+/// to the foreground.
+///
+/// Ranging stops with the app's going to the background, as Android's scan
+/// does: the engine's update loop is parked there and takes no reading until
+/// the return, and iOS no longer suspends a process a visit is tracked in
+/// (VenueTracker) - it runs for the whole visit, and every answer ranged
+/// meanwhile waited in the engine's queue to be taken, at the return, as heard
+/// that moment. An iPhone back in front after three and a half minutes of
+/// walking took in ten beacons of both wings of a mall in one millisecond, and
+/// its next fixes stood 49 to 92 m from where it was (2026-11-20). The visit
+/// tracker and the parking watcher range through location managers of their
+/// own and are not this one's to stop.
 ///
 /// Every call, including the delegate callbacks, lands on the main queue;
 /// nothing here is synchronised.
@@ -31,6 +43,9 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
     private var mRegistered = Set<UUID>()
     // What CoreLocation has been asked to range and has not failed since.
     private var mRanging = Set<UUID>()
+    // Off screen, where nothing is ranged. A process iOS launched in the
+    // background for a region starts there.
+    private var mInBackground = UIApplication.shared.applicationState == .background
     private var mFullAccuracyRequested = false
     private var mRetry: DispatchWorkItem?
     private var mRetryDelay = BeaconScanner.retryMin
@@ -38,6 +53,8 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         mManager.delegate = self
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground),
+                                               name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground),
                                                name: UIApplication.willEnterForegroundNotification, object: nil)
     }
@@ -67,14 +84,20 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
     /// forgotten, so the next `register` starts from nothing.
     func stop() {
         resetRetry()
+        stopRanging("the engine has no beacons nearby")
+        mRegistered.removeAll()
+    }
+
+    /// Ranging ends for every UUID; what is registered stays, for `sync` to
+    /// start again.
+    private func stopRanging(_ why: String) {
         for uuid in mRanging {
             mManager.stopRangingBeacons(satisfying: CLBeaconIdentityConstraint(uuid: uuid))
         }
         if !mRanging.isEmpty {
-            Logger.info("[Beacon] ranging stopped UUIDs [\(mRanging.count)]")
+            Logger.info("[Beacon] ranging stopped UUIDs [\(mRanging.count)] - \(why)")
         }
         mRanging.removeAll()
-        mRegistered.removeAll()
     }
 
     // MARK: - Starting
@@ -85,7 +108,7 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
     /// a retry - simply calls it.
     private func sync() {
         cancelRetry()
-        if mRegistered.isEmpty {
+        if mRegistered.isEmpty || mInBackground {
             return
         }
 
@@ -164,7 +187,14 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
         mRetryDelay = Self.retryMin
     }
 
+    @objc private func appDidEnterBackground() {
+        mInBackground = true
+        resetRetry()
+        stopRanging("the app is in the background")
+    }
+
     @objc private func appWillEnterForeground() {
+        mInBackground = false
         resetRetry()
         sync()
     }
@@ -181,6 +211,11 @@ final class BeaconScanner: NSObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager,
                          didRange beacons: [CLBeacon],
                          satisfying beaconConstraint: CLBeaconIdentityConstraint) {
+        // An answer already on its way when ranging stopped for the background
+        // is not the engine's to queue.
+        if mInBackground {
+            return
+        }
         // Delivered once a second per constraint; ranging is working.
         mRetryDelay = Self.retryMin
 

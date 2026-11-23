@@ -512,8 +512,12 @@ void IOSEngine::parkUntilForeground(TimePoint frameStart)
 
         // Deliberately not woken by events, unlike AndEngine: an event that
         // arrives while the app is backgrounded is picked up on the next
-        // foreground. iOS suspends the process a moment after this anyway, and
-        // waking to run engine code in that window buys nothing.
+        // foreground. iOS suspends most processes a moment after this, and
+        // waking to run engine code in that window buys nothing. A process a
+        // visit is tracked in is not suspended - it runs on for hours - so a
+        // source that would keep handing the engine readings there stops
+        // itself (BeaconScanner): held in the queue, they would all be taken at
+        // the return as that moment's.
         mLoopCv.wait(lock, [this] {
             return !mRunning || mAppInForeground;
         });
