@@ -213,6 +213,10 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         
         //--- enable audio/video autoplay
         config.mediaTypesRequiringUserActionForPlayback = []
+        // A video plays where the page puts it: the page's scanner shows the camera's picture
+        // under its own frame and words (web-site's CodeScannerOverlay), and an iPhone's web
+        // view otherwise takes any playing video to the full-screen player.
+        config.allowsInlineMediaPlayback = true
         //---
 
         // App-Bound Domains: with the host app's Info.plist naming the platform's domains
@@ -734,6 +738,26 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             completionHandler(nil)
         }))
         presentPanel(alertController)
+    }
+
+    // WKUIDelegate method - the page asks for the camera: its scanner, which reads a receipt's
+    // QR code or a prize's (web-site's CodeScannerOverlay, over getUserMedia). The camera's
+    // picture, and nothing else a page can capture, goes to this app's own page in the main
+    // frame and to no other - a dimension's app in its frame is not asked on behalf of.
+    // Answered here, WebKit puts up no question of its own naming the page's host; the
+    // system's question of the camera, where the visitor has not answered it yet, still comes.
+    func webView(_ webView: WKWebView,
+                 requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame frame: WKFrameInfo,
+                 type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void)
+    {
+        guard webView === self.webView, type == .camera, frame.isMainFrame, WebViewCtrl.isAppOrigin(origin.host) else {
+            Logger.info("WebViewCtrl: refused a page's request for media capture (type \(type.rawValue)) from [\(origin.host)]")
+            decisionHandler(.deny)
+            return
+        }
+        decisionHandler(.grant)
     }
 
     // WKUIDelegate method - window.open
