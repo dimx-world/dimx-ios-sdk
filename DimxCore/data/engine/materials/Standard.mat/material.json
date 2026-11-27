@@ -66,11 +66,6 @@
             "gl_uniform": "fReceiveLighting",
             "editable": true
         },
-        "receiveShadows": {
-            "type": "Bool",
-            "default_value": false,
-            "gl_uniform": "fReceiveShadows"
-        },
         "addColor": {
             "type": "Vec4",
             "default_value": [0, 0, 0, 0],

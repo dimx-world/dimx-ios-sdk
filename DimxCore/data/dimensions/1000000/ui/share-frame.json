@@ -1,0 +1,31 @@
+{
+    "_comment": "The share frame: the capture overlay MediaCapture draws into the photos and videos the shutter takes, never onto the display - the DimensionX watermark image in the bottom left corner at 60% opacity. The image is the engine's textures/waternark.png, a white logo on transparency named 'watermark' in engine/aliases.json; it is 626x139, so 200x44 pt keeps its shape. The root is shown only while a capture takes it. Sizes in UI points: 1000 across the picture.",
+    "capture_overlay": true,
+    "root": {
+        "name": "share-frame",
+        "type": "Window",
+        "panel": true,
+        "visible": false,
+        "style": {
+            "marginLeft": 32,
+            "marginRight": "auto",
+            "marginTop": "auto",
+            "marginBottom": 40,
+            "padding": 0,
+            "backgroundColor": [0, 0, 0, 0]
+        },
+        "children": [
+            {
+                "name": "watermark",
+                "type": "Image",
+                "style": {
+                    "width": 800,
+                    "height": 88,
+                    "objectFit": "contain",
+                    "opacity": 0.5,
+                    "backgroundImage": "watermark"
+                }
+            }
+        ]
+    }
+}

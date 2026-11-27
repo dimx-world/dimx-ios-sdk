@@ -18,6 +18,7 @@
         "maxWidth": 400,
         "flexDirection": "column",
         "flexGrow": 1,
+        "alignSelf": "stretch",
         "borderStyle": "none",
         "borderRadius": 0
     },
@@ -26,7 +27,8 @@
             "name": "tab-bar",
             "type": "TabBar",
             "style": {
-                "marginTop": 3
+                "marginTop": 3,
+                "flexGrow": 1
             },
             "children": [
                 {
@@ -85,9 +87,32 @@
                     "type": "TabBarItem",
                     "text": "Location",
                     "style": {
-                        "paddingTop": 30
+                        "paddingTop": 35,
+                        "flexDirection": "column",
+                        "flexGrow": 1
                     },
                     "children": [
+                        {
+                            "name": "origin-btn",
+                            "type": "Button",
+                            "toggle": true,
+                            "text": "Edit Origin",
+                            "style": {
+                                "flexShrink": 0,
+                                "width": 140,
+                                "height": 30
+                            }
+                        },
+                        {
+                            "name": "origin-txt",
+                            "type": "Text",
+                            "text": "",
+                            "style": {
+                                "flexShrink": 0,
+                                "marginTop": 4,
+                                "width": "100%"
+                            }
+                        },
                         {
                             "name": "location-props-view",
                             "type": "PropertyView",
@@ -96,6 +121,301 @@
                                 "width": "100%",
                                 "flexGrow": 1
                             }
+                        }
+                    ]
+                },
+                {
+                    "_comment": "The dimension's map drawn in the scene (EditorMapView, run from EditorMapTab): the switch, the Tiles selection toggle with the selected tile's section, the colour mode, the surfaces, what is loaded, the keyframe the camera stands at with Prev / Play / Next, Frame all and Frame location, the pictures' and the map's opacity, and the scans as cards.",
+                    "name": "tab-bar-map",
+                    "type": "TabBarItem",
+                    "text": "Map",
+                    "style": {
+                        "paddingTop": 30,
+                        "flexDirection": "column",
+                        "flexGrow": 1,
+                        "gap": 6
+                    },
+                    "children": [
+                        {
+                            "_comment": "The tab's content as one scrolling area: an opened scan card lengthens it, and the whole tab scrolls - controls, sections and cards together. The right padding is the scrollbar's room, so it covers no text or button.",
+                            "name": "map-scroll",
+                            "style": {
+                                "width": "100%",
+                                "paddingRight": 16,
+                                "flexGrow": 1,
+                                "flexShrink": 1,
+                                "flexBasis": 0,
+                                "minHeight": 0,
+                                "flexDirection": "column",
+                                "gap": 6,
+                                "overflow": "scroll"
+                            },
+                            "children": [
+                                {
+                                    "_comment": "The venue's floor plan as the editor's floor (EditorVenueFloor): whether it is drawn, which floor, and a line saying what is shown.",
+                                    "name": "venue-frame",
+                                    "type": "CollapseFrame",
+                                    "text": "Venue Map",
+                                    "open": false,
+                                    "style": {
+                                        "flexShrink": 0,
+                                        "minHeight": 30,
+                                        "width": "100%",
+                                        "paddingTop": 30,
+                                        "flexDirection": "column",
+                                        "gap": 6
+                                    },
+                                    "children": [
+                                        {
+                                            "name": "venue-show-chk",
+                                            "type": "CheckBox",
+                                            "text": "Show venue map",
+                                            "value": false,
+                                            "style": { "width": "100%", "height": 24 }
+                                        },
+                                        {
+                                            "name": "venue-floors-cont",
+                                            "style": { "width": "100%", "flexDirection": "column", "gap": 4 },
+                                            "custom": {
+                                                "itemTemplate": {
+                                                    "style": { "width": "100%" },
+                                                    "children": [
+                                                        {
+                                                            "name": "venue-floor-btn",
+                                                            "type": "Button",
+                                                            "toggle": true,
+                                                            "text": "",
+                                                            "style": { "width": "100%", "height": 30, "textAlign": "left" }
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "name": "venue-frame-btn",
+                                            "type": "Button",
+                                            "text": "Frame floor",
+                                            "style": { "width": "100%", "height": 30 }
+                                        },
+                                        {
+                                            "name": "venue-status-txt",
+                                            "type": "Text",
+                                            "text": "",
+                                            "style": { "width": "100%", "minHeight": 40 }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "_comment": "The view's controls, kept at their heights (flexShrink 0): the tab scrolls as one (map-scroll).",
+                                    "name": "map-controls",
+                                    "style": { "width": "100%", "flexShrink": 0, "flexDirection": "column", "gap": 6 },
+                                    "children": [
+                                        {
+                                            "_comment": "The switch, and what a click in the scene selects while the tab is open: its entities (the toggle off), or the map's tiles (EditorDimension::SelectionMode). Leaving the tab switches the toggle off.",
+                                            "name": "display-row",
+                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6 },
+                                            "children": [
+                                                { "name": "display-btn", "type": "Button", "toggle": true, "text": "Display 3D map: off", "style": { "flexGrow": 2, "flexBasis": 0, "height": 36 } },
+                                                { "name": "tile-mode-btn", "type": "Button", "toggle": true, "text": "Select tiles", "style": { "flexGrow": 1, "flexBasis": 0, "height": 36 } }
+                                            ]
+                                        },
+                                        {
+                                            "_comment": "The tile picked in the scene: the index's counts, its pack, the health verdict and the heat (EditorMapView::tileStatus); the scans list below is filtered by it. Opened by the tab when a tile is picked.",
+                                            "name": "tile-frame",
+                                            "type": "CollapseFrame",
+                                            "text": "Selected tile",
+                                            "open": false,
+                                            "style": {
+                                                "flexShrink": 0,
+                                                "minHeight": 30,
+                                                "width": "100%",
+                                                "paddingTop": 30,
+                                                "flexDirection": "column",
+                                                "gap": 6
+                                            },
+                                            "children": [
+                                                {
+                                                    "name": "tile-txt",
+                                                    "type": "Text",
+                                                    "text": "",
+                                                    "style": { "width": "100%", "minHeight": 72 }
+                                                },
+                                                {
+                                                    "name": "tile-deselect-btn",
+                                                    "type": "Button",
+                                                    "text": "Deselect",
+                                                    "style": { "width": "100%", "height": 30 }
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "name": "color-row",
+                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6 },
+                                            "children": [
+                                                { "name": "color-scan-btn", "type": "Button", "toggle": true, "text": "By scan", "style": { "flexGrow": 1, "height": 30 } },
+                                                { "name": "color-strength-btn", "type": "Button", "toggle": true, "text": "By strength", "style": { "flexGrow": 1, "height": 30 } },
+                                                { "name": "color-tile-btn", "type": "Button", "toggle": true, "text": "By tile", "style": { "flexGrow": 1, "height": 30 } },
+                                                { "name": "color-use-btn", "type": "Button", "toggle": true, "text": "By use", "style": { "flexGrow": 1, "height": 30 } }
+                                            ]
+                                        },
+                                        {
+                                            "_comment": "What the devices' fixes leaned on (MAP_GET_USAGE): two lines at most, a fixed height.",
+                                            "name": "usage-txt",
+                                            "type": "Text",
+                                            "text": "",
+                                            "style": { "width": "100%", "minHeight": 40 }
+                                        },
+                                        {
+                                            "name": "surface-row",
+                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6 },
+                                            "children": [
+                                                { "name": "surface-off-btn", "type": "Button", "toggle": true, "text": "Surface off", "style": { "flexGrow": 1, "height": 30 } },
+                                                { "name": "surface-points-btn", "type": "Button", "toggle": true, "text": "Points", "style": { "flexGrow": 1, "height": 30 } },
+                                                { "name": "surface-mesh-btn", "type": "Button", "toggle": true, "text": "Mesh", "style": { "flexGrow": 1, "height": 30 } }
+                                            ]
+                                        },
+                                        {
+                                            "name": "surface-txt",
+                                            "type": "Text",
+                                            "text": "",
+                                            "style": { "width": "100%", "minHeight": 22 }
+                                        },
+                                        {
+                                            "_comment": "Three lines at most: a fixed height, so the rows below do not move as the text wraps.",
+                                            "name": "status-txt",
+                                            "type": "Text",
+                                            "text": "",
+                                            "style": { "width": "100%", "minHeight": 60 }
+                                        },
+                                        {
+                                            "name": "frame-row",
+                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6 },
+                                            "children": [
+                                                { "name": "frame-all-btn", "type": "Button", "text": "Frame all  (F)", "style": { "flexGrow": 1, "height": 30 } },
+                                                { "name": "frame-location-btn", "type": "Button", "text": "Frame location  (L)", "style": { "flexGrow": 1, "height": 30 } }
+                                            ]
+                                        },
+                                        {
+                                            "name": "step-row",
+                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6 },
+                                            "children": [
+                                                { "name": "prev-btn", "type": "Button", "text": "<  [", "style": { "width": 60, "height": 30 } },
+                                                { "name": "play-btn", "type": "Button", "text": "Play  (P)", "style": { "flexGrow": 1, "height": 30 } },
+                                                { "name": "next-btn", "type": "Button", "text": "]  >", "style": { "width": 60, "height": 30 } }
+                                            ]
+                                        },
+                                        {
+                                            "name": "follow-chk",
+                                            "type": "CheckBox",
+                                            "text": "Camera follows the keyframe",
+                                            "value": false,
+                                            "style": { "width": "100%", "height": 24 }
+                                        },
+                                        {
+                                            "name": "pictures-chk",
+                                            "type": "CheckBox",
+                                            "text": "Keyframe picture, and only its landmarks",
+                                            "value": false,
+                                            "style": { "width": "100%", "height": 24 }
+                                        },
+                                        {
+                                            "_comment": "The keyframe picture's opacity, and the opacity the landmarks and the surfaces are drawn at (EditorMapView::setOpacity).",
+                                            "name": "opacity-row",
+                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6, "alignItems": "center" },
+                                            "children": [
+                                                { "name": "opacity-txt", "type": "Text", "text": "Picture", "style": { "width": 70 } },
+                                                { "name": "opacity-bar", "type": "ProgressBar", "interactive": true, "progress": 0.5, "text": "50%", "style": { "flexGrow": 1, "flexBasis": 0, "height": 22 } },
+                                                { "name": "map-opacity-txt", "type": "Text", "text": "Map", "style": { "width": 44, "marginLeft": 6 } },
+                                                { "name": "map-opacity-bar", "type": "ProgressBar", "interactive": true, "progress": 1.0, "text": "100%", "style": { "flexGrow": 1, "flexBasis": 0, "height": 22 } }
+                                            ]
+                                        },
+                                        {
+                                            "name": "picture-txt",
+                                            "type": "Text",
+                                            "text": "",
+                                            "style": { "width": "100%", "minHeight": 20 }
+                                        },
+                                        {
+                                            "name": "keyframe-txt",
+                                            "type": "Text",
+                                            "text": "",
+                                            "style": { "width": "100%", "minHeight": 36 }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": "scans-title-txt",
+                                    "type": "Text",
+                                    "text": "Scans - a card opens on its scan; Fly to moves the camera",
+                                    "style": { "width": "100%", "flexShrink": 0, "marginTop": 6 }
+                                },
+                                {
+                                    "_comment": "The visitors: whether the map takes visits (a toggle, a job of the service's) and what the visits brought - each taken into the map as a scan of kind visit, verified keyframe by keyframe; a visit's card is among the scans.",
+                                    "name": "visits-row",
+                                    "style": { "width": "100%", "flexDirection": "row", "gap": 6, "alignItems": "center", "flexShrink": 0 },
+                                    "children": [
+                                        { "name": "visits-btn", "type": "Button", "text": "Visits on", "toggle": true, "style": { "width": 84, "height": 24 } },
+                                        { "name": "visits-txt", "type": "Text", "text": "", "style": { "flexGrow": 1, "flexBasis": 0, "minHeight": 24 } }
+                                    ]
+                                },
+                                {
+                                    "_comment": "The scans as cards, as tall as they are: an open card lengthens the tab, which scrolls (map-scroll).",
+                                    "name": "scans-cont",
+                                    "style": {
+                                        "width": "100%",
+                                        "flexShrink": 0,
+                                        "flexDirection": "column",
+                                        "gap": 4
+                                    },
+                                    "custom": {
+                                        "itemTemplate": {
+                                            "style": { "width": "100%", "flexShrink": 0 },
+                                            "children": [
+                                                {
+                                                    "_comment": "One scan's card (EditorMapTab): the header is the scan in a line; open, its record and its actions.",
+                                                    "name": "scan-frame",
+                                                    "type": "CollapseFrame",
+                                                    "text": "",
+                                                    "open": false,
+                                                    "style": {
+                                                        "flexShrink": 0,
+                                                        "minHeight": 30,
+                                                        "width": "100%",
+                                                        "paddingTop": 30,
+                                                        "paddingLeft": 6,
+                                                        "paddingRight": 6,
+                                                        "paddingBottom": 6,
+                                                        "flexDirection": "column",
+                                                        "gap": 4
+                                                    },
+                                                    "children": [
+                                                        {
+                                                            "_comment": "The actions first, under the header, so they are in reach whatever the record's length.",
+                                                            "name": "scan-actions",
+                                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6 },
+                                                            "children": [
+                                                                { "name": "scan-fly-btn", "type": "Button", "text": "Fly to", "style": { "flexGrow": 1, "height": 28 } },
+                                                                { "name": "scan-toggle-btn", "type": "Button", "text": "Disable", "style": { "flexGrow": 1, "height": 28 } }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "_comment": "A delete says what it takes: the map's part, the recording kept to be inserted again from the studio, or the recording too.",
+                                                            "name": "scan-delete-actions",
+                                                            "style": { "width": "100%", "flexDirection": "row", "gap": 6 },
+                                                            "children": [
+                                                                { "name": "scan-delete-btn", "type": "Button", "text": "Delete from map", "style": { "flexGrow": 1, "height": 28 } },
+                                                                { "name": "scan-delete-all-btn", "type": "Button", "text": "Delete + recording", "style": { "flexGrow": 1, "height": 28 } }
+                                                            ]
+                                                        },
+                                                        { "name": "scan-job-txt", "type": "Text", "text": "", "style": { "width": "100%", "minHeight": 18 } },
+                                                        { "name": "scan-details-txt", "type": "Text", "text": "", "style": { "width": "100%", "minHeight": 60 } }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     ]
                 }

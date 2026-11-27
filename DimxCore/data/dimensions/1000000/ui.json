@@ -5,7 +5,6 @@
             "@dimensions-screen.json",
             "@dimension-screen.json",
             "@placement-screen.json",
-            "@scan-screen.json",
             "@notification-panel.json",
             "@alert-screen.json",
             "@confirm-screen.json",
@@ -23,7 +22,8 @@
             "@logger-panel.json",
             "@share-panel.json",
             "@hint-panel.json",
-            "@guidance-screen.json"
+            "@guidance-screen.json",
+            "@shutter-flash.json"
         ]
     }
 }

@@ -8,6 +8,12 @@ DIMX_FLOAT_PRECISION
 in vec2 fTexCoord;
 #endif
 
+#ifdef USE_DEPTH_FOR_OCCLUSION
+in vec4 fPosition;
+in vec4 fViewPosition;
+#include "depth_occlusion.inc"
+#endif
+
 out vec4 outColor;
 
 uniform vec4 fBaseColor;
@@ -33,5 +39,12 @@ void main()
 
     // Premultiplied out, like every shader: the blend is ONE / ONE_MINUS_SRC_ALPHA.
     vec4 color = (baseColor + fAddColor) * fMultColor;
+
+#ifdef USE_DEPTH_FOR_OCCLUSION
+    if (fUseDepthOcclusion) {
+        color.a *= calcOcclusion(fViewPosition, fPosition);
+    }
+#endif
+
     outColor = vec4(color.rgb * color.a, color.a);
 }

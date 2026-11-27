@@ -1,4 +1,5 @@
 {
+    "_comment": "The location's hints (AppHintPanel), a strip above the bottom bar: bottom clears the bar (its top is 202 pt up, mobile-main-screen.json) and the recording pill or the 48 pt caption the bar shows above its shutter.",
     "name": "hint-panel",
     "type": "Window",
     "panel": true,
@@ -6,7 +7,7 @@
     "style": {
         "left": 0,
         "right": 0,
-        "bottom": 160,
+        "bottom": 292,
         "padding": 20,
         "flexDirection": "row",
         "alignItems": "center",

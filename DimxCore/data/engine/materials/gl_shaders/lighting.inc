@@ -1,5 +1,4 @@
 uniform vec3 fLightDir;
-uniform vec4 fLightVolume;
 uniform vec3 fLightAmbientColor;
 uniform vec3 fLightDiffuseColor;
 uniform vec3 fLightSpecularColor;

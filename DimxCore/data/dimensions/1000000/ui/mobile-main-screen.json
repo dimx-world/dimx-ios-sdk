@@ -1,4 +1,5 @@
 {
+    "_comment": "The AR screen's bottom bar (AppMobileMainScreen): the hint button at the left, the shutter in the middle - a tap takes a photo, a long press starts a video and a tap stops it; AppMobileSharePanel drives it, and it is hidden when the app config enables neither - and the return button at the right, a row 162 pt tall (the 150 pt shutter with 6 pt of margin above and below: its border is drawn centred on its edge, 3 pt of it outside the box, and with 4 pt a pixel's shift of the window after a tap trimmed the ring's top row on a phone) whose bottom edge is 40 pt above the screen's (bottom 30 + marginBottom 10). The status slot above the row is empty but for the recording pill while a video records and the caption the shutter shows for a moment after a tap. The captures themselves are share-panel.json. Sizes in UI points: 1000 across the screen.",
     "?_ignore_": [
         { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
         { "condition": "", "value": true }
@@ -15,44 +16,173 @@
         "marginLeft": 10,
         "marginRight": 10,
         "marginBottom": 10,
-        "paddingLeft": 30,
-        "paddingRight": 30,
-        "flexDirection": "row",
-        "justifyContent": "space-between"
-    },
-    "styleSheet": {
-        "Button": {
-            "width": 120,
-            "height": 120,
-            "backgroundColor": [0, 0, 0, 0],
-            "borderStyle": "none"
-        }
+        "padding": 0,
+        "flexDirection": "column",
+        "alignItems": "center"
     },
     "children": [
         {
-            "name": "scan-btn",
-            "type": "Button",
+            "name": "status",
+            "type": "Element",
             "style": {
-                "backgroundImage": "mobile-ui",
-                "backgroundImageRect": [100, 0, 100, 100]
-            }
+                "flexDirection": "row",
+                "alignItems": "center",
+                "justifyContent": "center"
+            },
+            "children": [
+                {
+                    "name": "rec-pill",
+                    "type": "Element",
+                    "visible": false,
+                    "style": {
+                        "flexDirection": "row",
+                        "alignItems": "center",
+                        "gap": 12,
+                        "marginBottom": 10,
+                        "paddingLeft": 18,
+                        "paddingRight": 20,
+                        "paddingTop": 6,
+                        "paddingBottom": 6,
+                        "borderRadius": 24,
+                        "backgroundColor": [0, 0, 0, 0.55]
+                    },
+                    "children": [
+                        {
+                            "name": "rec-dot",
+                            "type": "Element",
+                            "style": {
+                                "width": 20,
+                                "height": 20,
+                                "borderRadius": 14,
+                                "backgroundColor": [0.95, 0.2, 0.2, 1]
+                            }
+                        },
+                        {
+                            "name": "rec-time",
+                            "type": "Text",
+                            "text": "00:00",
+                            "style": {
+                                "color": [1, 1, 1, 1],
+                                "fontSize": 40
+                            }
+                        }
+                    ]
+                },
+                {
+                    "_comment": "What the map search says while nothing is on screen yet (AppMobileMainScreen): loading, looking, localized - hidden while the caption or the recording pill has the slot.",
+                    "name": "map-status",
+                    "type": "Text",
+                    "text": "",
+                    "visible": false,
+                    "style": {
+                        "marginBottom": 10,
+                        "paddingLeft": 18,
+                        "paddingRight": 18,
+                        "paddingTop": 6,
+                        "paddingBottom": 6,
+                        "borderRadius": 20,
+                        "color": [1, 1, 1, 1],
+                        "fontSize": 34,
+                        "backgroundColor": [0, 0, 0, 0.5]
+                    }
+                },
+                {
+                    "name": "caption",
+                    "type": "Text",
+                    "text": "Hold for video",
+                    "visible": false,
+                    "style": {
+                        "marginBottom": 10,
+                        "paddingLeft": 18,
+                        "paddingRight": 18,
+                        "paddingTop": 6,
+                        "paddingBottom": 6,
+                        "borderRadius": 20,
+                        "color": [1, 1, 1, 1],
+                        "fontSize": 48,
+                        "backgroundColor": [0, 0, 0, 0.5]
+                    }
+                }
+            ]
         },
         {
-            "name": "hint-btn",
-            "type": "Button",
-            "enabled": false,
-            "toggle": true,
+            "name": "bar",
+            "type": "Element",
             "style": {
-                "backgroundImage": "hand-scan.png"
-            }
-        },
-        {
-            "name": "return-btn",
-            "type": "Button",
-            "style": {
-                "backgroundImage": "mobile-ui",
-                "backgroundImageRect": [200, 0, 100, 100]
-            }
+                "alignSelf": "stretch",
+                "flexDirection": "row",
+                "justifyContent": "space-between",
+                "alignItems": "center",
+                "paddingLeft": 30,
+                "paddingRight": 30
+            },
+            "styleSheet": {
+                "Button": {
+                    "width": 120,
+                    "height": 120,
+                    "backgroundColor": [0, 0, 0, 0],
+                    "borderStyle": "none"
+                }
+            },
+            "children": [
+                {
+                    "name": "hint-btn",
+                    "type": "Button",
+                    "enabled": false,
+                    "toggle": true,
+                    "style": {
+                        "backgroundImage": "hand-scan.png"
+                    }
+                },
+                {
+                    "name": "shutter",
+                    "type": "Element",
+                    "style": {
+                        "width": 150,
+                        "height": 150,
+                        "marginTop": 6,
+                        "marginBottom": 6,
+                        "borderRadius": 75,
+                        "borderStyle": "solid",
+                        "borderWidth": 6,
+                        "borderColor": [1, 1, 1, 1],
+                        "backgroundColor": [0, 0, 0, 0.35],
+                        "justifyContent": "center",
+                        "alignItems": "center"
+                    },
+                    "children": [
+                        {
+                            "name": "shutter-core",
+                            "type": "Element",
+                            "style": {
+                                "width": 106,
+                                "height": 106,
+                                "borderRadius": 53,
+                                "backgroundColor": [1, 1, 1, 1]
+                            }
+                        },
+                        {
+                            "name": "shutter-stop",
+                            "type": "Element",
+                            "visible": false,
+                            "style": {
+                                "width": 64,
+                                "height": 64,
+                                "borderRadius": 14,
+                                "backgroundColor": [0.95, 0.2, 0.2, 1]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "return-btn",
+                    "type": "Button",
+                    "style": {
+                        "backgroundImage": "mobile-ui",
+                        "backgroundImageRect": [200, 0, 100, 100]
+                    }
+                }
+            ]
         }
     ]
 }

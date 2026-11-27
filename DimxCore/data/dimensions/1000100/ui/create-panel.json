@@ -168,19 +168,11 @@
                     }
                 },
                 {
-                    "name": "sticky-dummy-floor-btn",
+                    "name": "anchor-btn",
                     "type": "Button",
-                    "text": "Floor Sticky Dummy",
+                    "text": "Anchor",
                     "style": {
-                        "backgroundImage": "sticky-dummy-floor-thumbnail"
-                    }
-                },
-                {
-                    "name": "sticky-dummy-wall-btn",
-                    "type": "Button",
-                    "text": "Wall Sticky Dummy",
-                    "style": {
-                        "backgroundImage": "sticky-dummy-wall-thumbnail"
+                        "backgroundImage": "anchor-thumbnail"
                     }
                 }
             ]

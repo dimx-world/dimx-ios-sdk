@@ -1,0 +1,135 @@
+{
+    "_comment": "The mobile editor's Locations screen (EditorMobileLocationsScreen), from the right panel's locations button once the map is tracked: Create New Location - a name, then the origin placed in the scene - and the dimension's locations nearest first, each a framed row a tap on anywhere of selects to edit. Sizes in UI points: 1000 across the screen. The window has a fixed height and scrolls, so everything above the list and the list itself say flexShrink 0: yoga's web defaults let a fixed-height window shrink its children to fit, and over nineteen rows the Create button came out 40 points tall. The right padding leaves the phone's 70-pixel scrollbar room beside the rows rather than over them.",
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "_comment2": "Not modal: the name prompt is a modal of the app's, and two modals in the one on-screen ImGui context close each other every frame.",
+    "name": "mobile-locations-screen",
+    "type": "Window",
+    "text": "Locations",
+    "visible": false,
+    "modal": false,
+    "closeButton": true,
+    "scrollable": true,
+    "style": {
+        "marginLeft": "auto",
+        "marginRight": "auto",
+        "marginTop": 140,
+        "width": 968,
+        "height": 1750,
+        "flexDirection": "column",
+        "gap": 18,
+        "paddingTop": 22,
+        "paddingBottom": 22,
+        "paddingLeft": 22,
+        "paddingRight": 100
+    },
+    "children": [
+        {
+            "name": "status-txt",
+            "type": "Text",
+            "text": "",
+            "style": {
+                "width": "100%",
+                "flexShrink": 0,
+                "marginTop": 10,
+                "fontSize": 31,
+                "color": [0.85, 0.9, 0.95, 1]
+            }
+        },
+        {
+            "name": "actions-row",
+            "style": {
+                "width": "100%",
+                "height": 130,
+                "flexShrink": 0,
+                "flexDirection": "row",
+                "gap": 18
+            },
+            "children": [
+                {
+                    "name": "create-btn",
+                    "type": "Button",
+                    "text": "Create New Location",
+                    "style": {
+                        "height": 130,
+                        "flexGrow": 1,
+                        "flexBasis": 0,
+                        "borderRadius": 24,
+                        "fontSize": 40
+                    }
+                },
+                {
+                    "name": "move-btn",
+                    "type": "Button",
+                    "text": "Move Origin",
+                    "style": {
+                        "height": 130,
+                        "flexGrow": 1,
+                        "flexBasis": 0,
+                        "borderRadius": 24,
+                        "fontSize": 40
+                    }
+                }
+            ]
+        },
+        {
+            "name": "locations-cont",
+            "style": {
+                "width": "100%",
+                "flexDirection": "column",
+                "gap": 14,
+                "flexShrink": 0
+            },
+            "custom": {
+                "itemTemplate": {
+                    "style": {
+                        "width": "100%",
+                        "height": 180,
+                        "flexShrink": 0
+                    },
+                    "children": [
+                        {
+                            "name": "item-btn",
+                            "type": "Button",
+                            "toggle": true,
+                            "style": {
+                                "width": "100%",
+                                "height": 180,
+                                "borderRadius": 20,
+                                "textAlign": "left"
+                            }
+                        },
+                        {
+                            "name": "name-txt",
+                            "type": "Text",
+                            "text": "Location",
+                            "style": {
+                                "left": 36,
+                                "top": 26,
+                                "right": 36,
+                                "height": 60,
+                                "fontSize": 40
+                            }
+                        },
+                        {
+                            "name": "where-txt",
+                            "type": "Text",
+                            "text": "",
+                            "style": {
+                                "left": 36,
+                                "top": 98,
+                                "right": 36,
+                                "height": 50,
+                                "fontSize": 29,
+                                "color": [0.78, 0.84, 0.9, 1]
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

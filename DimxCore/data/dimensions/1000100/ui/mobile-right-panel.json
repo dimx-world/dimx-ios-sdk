@@ -14,7 +14,7 @@
         "marginTop": "auto",
         "marginBottom": "auto",
         "width": 200,
-        "height": 700,
+        "height": 1200,
         "flexDirection": "column",
         "alignItems": "center",
         "justifyContent": "space-between",
@@ -31,7 +31,25 @@
     },
     "children": [
         {
-            "name": "anchors-btn",
+            "_comment": "The scan editor (EditorUIManager::showScanEditor): records the dimension's map where the device stands; enabled with a dimension selected.",
+            "name": "scan-editor-btn",
+            "type": "Button",
+            "style": {
+                "backgroundImage": "editor-mobile-ui",
+                "backgroundImageRect": [300, 200, 100, 100]
+            }
+        },
+        {
+            "_comment": "The Locations screen (EditorMobileLocationsScreen): the locations nearby to edit and Create New Location; enabled once the map tracker holds the map.",
+            "name": "locations-btn",
+            "type": "Button",
+            "style": {
+                "backgroundImage": "editor-mobile-ui",
+                "backgroundImageRect": [300, 300, 100, 100]
+            }
+        },
+        {
+            "name": "markers-btn",
             "type": "Button",
             "style": {
                 "backgroundImage": "editor-mobile-ui",

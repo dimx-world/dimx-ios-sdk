@@ -1,16 +1,34 @@
  {
+    "_comment": "The engine's alert (AppAlertScreen). On a phone it is 900 points of the screen's 1000 wide, its text and button at sizes a finger can use; the desktop keeps the small dialog.",
     "name": "alert-screen",
     "type": "Window",
     "visible": false,
     "closeButton": false,
-    "style": {
-        "margin": "auto",
-        "width": 500,
-        "flexDirection": "column",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "padding": 20
-    },
+    "?style": [
+        {
+            "condition": {"type": "platform", "value": "Mobile"},
+            "value": {
+                "margin": "auto",
+                "width": 900,
+                "flexDirection": "column",
+                "alignItems": "stretch",
+                "gap": 24,
+                "padding": 30,
+                "fontSize": 40
+            }
+        },
+        {
+            "condition": "",
+            "value": {
+                "margin": "auto",
+                "width": 500,
+                "flexDirection": "column",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "padding": 20
+            }
+        }
+    ],
     "modal": true,
     "text": "Alert Window",
     "children": [
@@ -18,19 +36,46 @@
             "name": "details",
             "type": "Text",
             "text": "This is an alert message.",
-            "style": {
-                "width": "100%",
-                "margin": 20
-            }
+            "?style": [
+                {
+                    "condition": {"type": "platform", "value": "Mobile"},
+                    "value": {
+                        "width": "100%",
+                        "fontSize": 34
+                    }
+                },
+                {
+                    "condition": "",
+                    "value": {
+                        "width": "100%",
+                        "margin": 20
+                    }
+                }
+            ]
         },
         {
             "name": "ok-btn",
             "type": "Button",
             "text": "OK",
-            "style": {
-                "width": 300,
-                "padding": 10
-            }
+            "?style": [
+                {
+                    "condition": {"type": "platform", "value": "Mobile"},
+                    "value": {
+                        "width": "100%",
+                        "height": 120,
+                        "marginTop": 10,
+                        "borderRadius": 24,
+                        "fontSize": 40
+                    }
+                },
+                {
+                    "condition": "",
+                    "value": {
+                        "width": 300,
+                        "padding": 10
+                    }
+                }
+            ]
         }
     ]
 }
