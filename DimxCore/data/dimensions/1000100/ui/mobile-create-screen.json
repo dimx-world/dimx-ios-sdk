@@ -22,11 +22,47 @@
     },
     "children": [
         {
+            "name": "anchors-frame",
+            "type": "CollapseFrame",
+            "text": "Anchors",
+            "style": {
+                "marginTop": 10,
+                "flexShrink": 0,
+                "minHeight": 30,
+                "width": "100%"
+            },
+            "children": [
+                {
+                    "name": "anchors-cont",
+                    "style": {
+                        "width": "100%",
+                        "flexDirection": "column",
+                        "gap": 5
+                    },
+                    "children" : [
+                        {
+                            "name": "anchor-btn",
+                            "type": "Button",
+                            "text": "Anchor",
+                            "classNames": ["no-frame"],
+                            "style": {
+                                "height": 150,
+                                "width": "100%",
+                                "backgroundImage": "anchor-thumbnail",
+                                "backgroundPosition": "left",
+                                "textAlign": "left"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             "name": "standard-frame",
             "type": "CollapseFrame",
             "text": "Standard Models",
             "style": {
-                "marginTop": 10,
+                "flexShrink": 0,
                 "flexShrink": 0,
                 "minHeight": 30,
                 "width": "100%"
@@ -119,32 +155,6 @@
                                 "height": 150,
                                 "width": "100%",
                                 "backgroundImage": "dummy-thumbnail",
-                                "backgroundPosition": "left",
-                                "textAlign": "left"
-                            }
-                        },
-                        {
-                            "name": "sticky-dummy-floor-btn",
-                            "type": "Button",
-                            "text": "Floor Sticky Dummy",
-                            "classNames": ["no-frame"],
-                            "style": {
-                                "height": 150,
-                                "width": "100%",
-                                "backgroundImage": "sticky-dummy-floor-thumbnail",
-                                "backgroundPosition": "left",
-                                "textAlign": "left"
-                            }
-                        },
-                        {
-                            "name": "sticky-dummy-wall-btn",
-                            "type": "Button",
-                            "text": "Wall Sticky Dummy",
-                            "classNames": ["no-frame"],
-                            "style": {
-                                "height": 150,
-                                "width": "100%",
-                                "backgroundImage": "sticky-dummy-wall-thumbnail",
                                 "backgroundPosition": "left",
                                 "textAlign": "left"
                             }

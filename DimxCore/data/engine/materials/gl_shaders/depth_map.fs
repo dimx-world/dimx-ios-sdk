@@ -1,8 +1,8 @@
 DIMX_FLOAT_PRECISION
 
 in vec2 fTexCoord;
+in vec4 fPosition;
 in vec4 fViewPosition;
-in vec4 fScreenSpacePos;
 
 uniform sampler2D fDepthMap;
 uniform mat3 fDepthMapUVTransform;
@@ -53,7 +53,7 @@ void main()
 //    vec2 uv = vec2(1.0 - fTexCoord.y, 1.0 - fTexCoord.x); // this works
 //    vec2 uv = (fDepthMapUVTransform * vec3(fTexCoord.xy, 1)).xy; // doesn't work
 
-    vec2 uv = (fDepthMapUVTransform * vec3(fScreenSpacePos.xy, 1)).xy;
+    vec2 uv = (fDepthMapUVTransform * vec3(fPosition.xy / fPosition.w, 1)).xy;
 
     highp float normalized_depth = DepthGetMillimeters(fDepthMap, uv) / kMaxDepth;
     normalized_depth = clamp(normalized_depth, 0.0, 1.0);

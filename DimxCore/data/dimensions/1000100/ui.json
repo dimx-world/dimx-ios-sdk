@@ -7,7 +7,6 @@
             "@locations-screen.json",
             "@objects-screen.json",
             "@editor-menu.json",
-            "@anchor-placement-screen.json",
             "@object-placement-screen.json",
             "@manipulate-panel.json",
             "@create-panel.json",
@@ -17,10 +16,15 @@
             "@asset-item-context-menu.json",
             "@mobile-bottom-panel.json",
             "@mobile-right-panel.json",
-            "@mobile-anchors-screen.json",
+            "@mobile-markers-screen.json",
+            "@mobile-locations-screen.json",
             "@mobile-properties-screen.json",
             "@mobile-create-screen.json",
-            "@mobile-top-panel.json"
+            "@mobile-top-panel.json",
+            "@scan-editor-top.json",
+            "@scan-editor-bottom.json",
+            "@scan-editor-scans.json",
+            "@scan-editor-session.json"
         ]
     }
 }

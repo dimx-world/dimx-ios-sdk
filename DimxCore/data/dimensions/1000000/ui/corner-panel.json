@@ -46,6 +46,15 @@
             }
         },
         {
+            "_comment": "The dimension map's surface, on and off (AppCornerPanel, MapOverlay): white while hidden, tinted while shown.",
+            "name": "map-button",
+            "type": "Button",
+            "classNames": [ "no-frame" ],
+            "style": {
+                "backgroundImage": "textures/map-surface-button.png"
+            }
+        },
+        {
             "name": "main-menu-button",
             "type": "Button",
             "classNames": [ "no-frame" ],

@@ -70,9 +70,9 @@
                     }
                 },
                 {
-                    "name": "markers-filter-btn",
+                    "name": "anchors-filter-btn",
                     "type": "Button",
-                    "text": "Markers",
+                    "text": "Anchors",
                     "toggle": true,
                     "?visible": [
                         { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
@@ -85,9 +85,9 @@
                     }
                 },
                 {
-                    "name": "anchors-filter-btn",
+                    "name": "markers-filter-btn",
                     "type": "Button",
-                    "text": "CloudAnchors",
+                    "text": "Markers",
                     "toggle": true,
                     "?visible": [
                         { "condition": {"type": "platform", "value": "Mobile"}, "value": false },

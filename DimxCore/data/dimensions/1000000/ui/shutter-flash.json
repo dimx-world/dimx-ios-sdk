@@ -1,0 +1,24 @@
+{
+    "_comment": "The shutter flash: a white sheet over the whole screen that the share panel shows for a frame when a photo is taken and fades out (AppMobileSharePanel). Takes no input and is the last window, so it lies over every other.",
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "shutter-flash",
+    "type": "Window",
+    "panel": true,
+    "visible": false,
+    "receiveInput": false,
+    "classNames": [ "no-frame" ],
+    "style": {
+        "positionType": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "padding": 0,
+        "opacity": 0.8,
+        "backgroundColor": [1, 1, 1, 1]
+    }
+}

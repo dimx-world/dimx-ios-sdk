@@ -3,8 +3,6 @@ DIMX_FLOAT_PRECISION
 in vec4 fPosition;
 in vec4 fWorldPosition;
 in vec4 fViewPosition;
-in vec4 fScreenSpacePos;
-in vec4 fLightSpacePos;
 
 #ifdef VA_vNormal
 in vec3 fNormal;
@@ -46,7 +44,6 @@ uniform vec4 fMultColor;
 uniform vec3 fCameraPos;
 
 uniform bool fReceiveLighting;
-uniform bool fReceiveShadows;
 
 uniform samplerCube fIrradianceMap;
 uniform samplerCube fRadianceMap;
@@ -65,7 +62,6 @@ uniform float fAlphaCutoff;
 uniform bool fBaseColorMapPremultiplied;
 
 #include "lighting.inc"
-#include "shadow_map.inc"
 
 #ifdef USE_DEPTH_FOR_OCCLUSION
 #include "depth_occlusion.inc"
@@ -275,23 +271,12 @@ void main()
 */
     }
 
-/*
-// Commented out because some androids (Galaxy S20 FE 5G)
-// every branch is actually executed regardles of the condition.
-// Then the result is picked based on the condition.
-// This leads to poor performance even when shadows are off.
-
-    if (fReceiveShadows) {
-        baseColor.xyz *= 1.0 - calcShadow(fLightSpacePos);
-    }
-*/
-
     vec4 color = (baseColor + fAddColor) * fMultColor;
 
 #ifdef USE_DEPTH_FOR_OCCLUSION
     // A fade: alpha alone, so the premultiply below scales the colour once.
     if (fUseDepthOcclusion) {
-        color.a *= calcOcclusion(fViewPosition, fScreenSpacePos);
+        color.a *= calcOcclusion(fViewPosition, fPosition);
     }
 #endif
 

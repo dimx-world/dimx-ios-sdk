@@ -1,4 +1,4 @@
-import {app} from 'dimx-cpp'
+import {host} from 'dimx-cpp'
 
 const Templates = []
 
@@ -14,6 +14,9 @@ function makeEntityConfig(parent, record) {
     return {
         parent: parent.id,
         name: record.name,
+        // The app the record came from (its root): the entity resolves its asset
+        // names there first, so a record may name them by local path.
+        app: record._app_root_,
         visible: record.visible,
         transform: {
             position: record.position,
@@ -26,7 +29,7 @@ function makeEntityConfig(parent, record) {
 function makeInputConfig(record) {
     if (record.clickUrl) {
         return {
-            onClick: () => app.openUrl(record.clickUrl)
+            onClick: () => host.openUrl(record.clickUrl)
         }
     }
 
@@ -60,17 +63,36 @@ function makeFaceCameraConfig(record) {
     return undefined;
 }
 
+// An anchor under the record's anchor: one more place content attaches to, which its own
+// hooks and records hear of as it appears. It reports itself to the analytics unless said.
 Templates.push({
-    name: 'dummy',
+    name: 'anchor',
     config: {
         ...BaseConfig,
-        analytics: false
+        analytics: true
     },
     handler: (parent, record) => {
         let config = {
             ...makeEntityConfig(parent, record),
             components: {
-                Dummy: { analytics: record.analytics }
+                Anchor: { analytics: record.analytics }
+            }
+        }
+        parent.location.createEntity(config)
+    }
+})
+
+// A grouping node: nothing hooks it.
+Templates.push({
+    name: 'dummy',
+    config: {
+        ...BaseConfig
+    },
+    handler: (parent, record) => {
+        let config = {
+            ...makeEntityConfig(parent, record),
+            components: {
+                Dummy: {}
             }
         }
         parent.location.createEntity(config)

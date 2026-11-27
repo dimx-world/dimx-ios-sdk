@@ -1,14 +1,22 @@
 
+// Occlusion by the AR camera's depth: how much of a fragment the real world
+// leaves in sight - 1 with nothing real in front of it, 0 behind a wall. The
+// depth map is ARCore's DEPTH16, millimetres along the camera's axis, the low
+// byte in red and the high byte in green of an RG8 texture, laid over the
+// screen by fDepthMapUVTransform (screen NDC to depth texture). A depth of 0
+// is no data and hides nothing, which is what the map holds until the AR
+// session hands one over.
+
 uniform bool fUseDepthOcclusion;
 uniform sampler2D fDepthMap;
 uniform mat3 fDepthMapUVTransform;
 uniform float fDepthMapAspectRatio;
 
-float DepthGetMillimeters(in sampler2D depth_texture, in vec2 depth_uv) {
-  // Depth is packed into the red and green components of its texture.
-  // The texture is a normalized format, storing millimeters.
-  vec3 packedDepthAndVisibility = texture(depth_texture, depth_uv).xyz;
-  return dot(packedDepthAndVisibility.xy, vec2(255.0, 256.0 * 255.0));
+// The decode is linear in the two bytes, so the texture's linear filtering
+// interpolates the depth itself.
+float DepthGetMillimeters(in vec2 depth_uv) {
+  vec2 packedDepth = texture(fDepthMap, depth_uv).xy;
+  return dot(packedDepth, vec2(255.0, 256.0 * 255.0));
 }
 
 // Returns linear interpolation position of value between min and max bounds.
@@ -20,9 +28,8 @@ float DepthInverseLerp(in float value, in float min_bound, in float max_bound) {
 // Returns a value between 0.0 (not visible) and 1.0 (completely visible)
 // Which represents how visible or occluded is the pixel in relation to the
 // depth map.
-float DepthGetVisibility(in sampler2D depth_texture, in vec2 depth_uv,
-                         in float asset_depth_mm) {
-  float depth_mm = DepthGetMillimeters(depth_texture, depth_uv);
+float DepthGetVisibility(in vec2 depth_uv, in float asset_depth_mm) {
+  float depth_mm = DepthGetMillimeters(depth_uv);
 
   // Instead of a hard z-buffer test, allow the asset to fade into the
   // background along a 2 * kDepthTolerancePerMm * asset_depth_mm
@@ -47,64 +54,41 @@ float DepthGetVisibility(in sampler2D depth_texture, in vec2 depth_uv,
   return visibility;
 }
 
+// The visibility over the fragment's neighbourhood, so that an edge fades
+// rather than steps: a 3x3 tent (1-2-1 by 1-2-1) whose taps stand 1.5 blur
+// units apart. ARCore's sample spreads the same footprint over 21 taps; the
+// texture's linear filtering smooths between these. The y spacing is scaled by
+// the map's aspect ratio, so the kernel covers as many texels down as across.
 float DepthGetBlurredVisibilityAroundUV(in vec2 uv, in float asset_depth_mm)
 {
-  // Kernel used:
-  // 0   4   7   4   0
-  // 4   16  26  16  4
-  // 7   26  41  26  7
-  // 4   16  26  16  4
-  // 0   4   7   4   0
-  const float kKernelTotalWeights = 269.0;
-  float sum = 0.0;
-
   const float kOcclusionBlurAmount = 0.01;
-  vec2 blurriness = vec2(kOcclusionBlurAmount,
-                         kOcclusionBlurAmount * fDepthMapAspectRatio);
+  vec2 d = 1.5 * vec2(kOcclusionBlurAmount, kOcclusionBlurAmount * fDepthMapAspectRatio);
 
-  float current = 0.0;
+  float sum = 4.0 * DepthGetVisibility(uv, asset_depth_mm);
 
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-1.0, -2.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+1.0, -2.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-1.0, +2.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+1.0, +2.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-2.0, +1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+2.0, +1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-2.0, -1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+2.0, -1.0) * blurriness, asset_depth_mm);
-  sum += current * 4.0;
+  sum += 2.0 * (DepthGetVisibility(uv + vec2(+d.x, 0.0), asset_depth_mm)
+              + DepthGetVisibility(uv + vec2(-d.x, 0.0), asset_depth_mm)
+              + DepthGetVisibility(uv + vec2(0.0, +d.y), asset_depth_mm)
+              + DepthGetVisibility(uv + vec2(0.0, -d.y), asset_depth_mm));
 
-  current = 0.0;
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-2.0, -0.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+2.0, +0.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+0.0, +2.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-0.0, -2.0) * blurriness, asset_depth_mm);
-  sum += current * 7.0;
+  sum += DepthGetVisibility(uv + vec2(+d.x, +d.y), asset_depth_mm)
+       + DepthGetVisibility(uv + vec2(-d.x, +d.y), asset_depth_mm)
+       + DepthGetVisibility(uv + vec2(+d.x, -d.y), asset_depth_mm)
+       + DepthGetVisibility(uv + vec2(-d.x, -d.y), asset_depth_mm);
 
-  current = 0.0;
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-1.0, -1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+1.0, -1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-1.0, +1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+1.0, +1.0) * blurriness, asset_depth_mm);
-  sum += current * 16.0;
-
-  current = 0.0;
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+0.0, +1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-0.0, -1.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(-1.0, -0.0) * blurriness, asset_depth_mm);
-  current += DepthGetVisibility(fDepthMap, uv + vec2(+1.0, +0.0) * blurriness, asset_depth_mm);
-  sum += current * 26.0;
-
-  sum += DepthGetVisibility(fDepthMap, uv , asset_depth_mm) * 41.0;
-
-  return sum / kKernelTotalWeights;
+  return sum / 16.0;
 }
 
-float calcOcclusion(vec4 viewPos, vec4 screenSpacePos)
+// viewPos is the fragment in the camera's space, clipPos in clip space - the
+// position as the vertex shader wrote it, divided here rather than there: the
+// perspective division does not interpolate linearly across a triangle, and
+// on a big one close to the camera, a floor or a wall, a per-vertex division
+// sampled the depth map ever further from the fragment.
+float calcOcclusion(vec4 viewPos, vec4 clipPos)
 {
     const float kMetersToMillimeters = 1000.0;
     float object_depth_mm = viewPos.z * kMetersToMillimeters * -1.;
-    // Computes the texture coordinates to sample from the depth image.
-    vec2 depth_uvs = (fDepthMapUVTransform * vec3(screenSpacePos.xy, 1)).xy;
+    vec2 ndc = clipPos.xy / clipPos.w;
+    vec2 depth_uvs = (fDepthMapUVTransform * vec3(ndc, 1.0)).xy;
     return DepthGetBlurredVisibilityAroundUV(depth_uvs, object_depth_mm);
 }
