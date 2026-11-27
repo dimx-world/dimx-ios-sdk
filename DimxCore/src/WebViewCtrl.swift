@@ -185,6 +185,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         
         let config = WKWebViewConfiguration()
         config.userContentController.add(self, name: "WebViewCtrl")
+        // The engine reads a QR code off the page's scanner's picture, the web view having no reader
+        // of its own; a handler with a reply, so the page awaits the text (PageQrDecoder).
+        config.userContentController.addScriptMessageHandler(PageQrDecoder(), contentWorld: .page, name: PageQrDecoder.handlerName)
 
         //--- Inject AppInstanceId
         let appInstContent = "window.DIMX_APP_INSTANCE_ID = '\(Context.inst().settings().appInstanceId())'"
@@ -873,8 +876,8 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
 
     /// Whether a frame's host is this app's page: the host web_app_host points at, and no other -
     /// not the platform's other hosts either, since a dimension's app on the files host could put
-    /// itself in the main frame with a tap.
-    static private func isAppOrigin(_ host: String) -> Bool {
+    /// itself in the main frame with a tap. PageQrDecoder takes its pictures by it too.
+    static func isAppOrigin(_ host: String) -> Bool {
         let lowered = host.lowercased()
         return !lowered.isEmpty && lowered == webAppHostName()
     }

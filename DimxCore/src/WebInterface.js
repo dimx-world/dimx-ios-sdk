@@ -190,6 +190,14 @@ class IOSNativeInterface
     startProviderSignIn(providerId) {
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "START_PROVIDER_SIGN_IN", providerId: providerId});
     }
+
+    // The QR code in a picture of the page's scanner, read by the engine (PageQrDecoder): this web
+    // view has no reader of its own. `image` is the picture as a JPEG, base64. The one call here
+    // with an answer of its own - its handler replies - so it returns a promise of {text}, text
+    // null where the picture shows no code, rejected where the picture could not be read.
+    decodeQrCode(image) {
+        return window.webkit.messageHandlers.DimxQrDecode.postMessage({image: String(image)});
+    }
 } // class IOSNativeInterface
 
 window.Native = new IOSNativeInterface()
