@@ -40,7 +40,8 @@ final class ParkingConfig: CustomStringConvertible {
     static let minFenceRadius = 100.0
     static let maxFenceRadius = 5000.0
     static let defaultMeasuredPower = -59
-    private static let appUrlPrefix = "https://go.dimx.world/?dim="
+    /// A dimension's app url is its path on the link host, /d/<id> (the engine's Url).
+    private static let appUrlPrefix = "https://go.dimx.world/d/"
 
     let dimension: String
     let name: String
@@ -59,7 +60,7 @@ final class ParkingConfig: CustomStringConvertible {
         self.uuid = uuid
         self.measuredPower = measuredPower
         self.beacons = beacons
-        self.appUrl = ParkingConfig.appUrlPrefix + dimension + "&route=parking"
+        self.appUrl = ParkingConfig.appUrlPrefix + dimension + "?route=parking"
     }
 
     /// The identifier of the circular region this config registers.

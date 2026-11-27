@@ -74,7 +74,8 @@ final class VenueTrackingConfig: CustomStringConvertible {
     static let minFenceRadius = 100.0
     static let maxFenceRadius = 5000.0
     static let minSiteRadius = 20.0
-    private static let appUrlPrefix = "https://go.dimx.world/?dim="
+    /// A dimension's app url is its path on the link host, /d/<id> (the engine's Url).
+    private static let appUrlPrefix = "https://go.dimx.world/d/"
 
     let dimension: String
     let name: String
