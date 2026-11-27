@@ -1,0 +1,216 @@
+{
+    "_comment": "The scan editor's Scans (EditorScanScansScreen): the scans whose keyframes the device holds - the ones round it - nearest first, each with its first keyframe's picture; View opens a scan's pictures one keyframe at a time - what the author of that scan pointed the camera at, which is what to point the camera at to localize against it - and, while the device is localized, Show in AR puts that keyframe's camera, its picture and the points it saw where they were, over the camera. Sizes in UI points: 1000 across the screen.",
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "scan-editor-scans",
+    "type": "Window",
+    "text": "Scans",
+    "visible": false,
+    "modal": true,
+    "closeButton": true,
+    "scrollable": true,
+    "style": {
+        "marginLeft": "auto",
+        "marginRight": "auto",
+        "marginTop": 140,
+        "width": 950,
+        "height": 1750,
+        "flexDirection": "column",
+        "gap": 16,
+        "padding": 22
+    },
+    "children": [
+        {
+            "name": "header-txt",
+            "type": "Text",
+            "text": "",
+            "style": {
+                "width": "100%",
+                "fontSize": 31
+            }
+        },
+        {
+            "name": "list-cont",
+            "style": {
+                "width": "100%",
+                "flexDirection": "column",
+                "gap": 14
+            },
+            "custom": {
+                "itemTemplate": {
+                    "style": {
+                        "width": "100%",
+                        "height": 190,
+                        "flexDirection": "row",
+                        "alignItems": "center",
+                        "gap": 16
+                    },
+                    "children": [
+                        {
+                            "name": "thumb-img",
+                            "type": "Image",
+                            "style": {
+                                "width": 240,
+                                "height": 180,
+                                "flexShrink": 0,
+                                "borderRadius": 12,
+                                "objectFit": "cover",
+                                "backgroundColor": [1, 1, 1, 0.08]
+                            }
+                        },
+                        {
+                            "name": "info",
+                            "style": {
+                                "flexGrow": 1,
+                                "flexShrink": 1,
+                                "flexBasis": 0,
+                                "flexDirection": "column",
+                                "gap": 6
+                            },
+                            "children": [
+                                {
+                                    "name": "title-txt",
+                                    "type": "Text",
+                                    "text": "Scan",
+                                    "style": {
+                                        "width": "100%",
+                                        "fontSize": 35
+                                    }
+                                },
+                                {
+                                    "name": "detail-txt",
+                                    "type": "Text",
+                                    "text": "",
+                                    "style": {
+                                        "width": "100%",
+                                        "fontSize": 27,
+                                        "color": [0.78, 0.84, 0.9, 1]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "view-btn",
+                            "type": "Button",
+                            "text": "View",
+                            "style": {
+                                "width": 150,
+                                "height": 110,
+                                "flexShrink": 0,
+                                "fontSize": 33
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "viewer",
+            "visible": false,
+            "style": {
+                "width": "100%",
+                "flexDirection": "column",
+                "gap": 14
+            },
+            "children": [
+                {
+                    "name": "viewer-title-txt",
+                    "type": "Text",
+                    "text": "",
+                    "style": {
+                        "width": "100%",
+                        "fontSize": 36
+                    }
+                },
+                {
+                    "name": "picture-img",
+                    "type": "Image",
+                    "style": {
+                        "width": "100%",
+                        "height": 680,
+                        "objectFit": "contain",
+                        "backgroundColor": [0, 0, 0, 0.5]
+                    }
+                },
+                {
+                    "name": "picture-txt",
+                    "type": "Text",
+                    "text": "",
+                    "style": {
+                        "width": "100%",
+                        "fontSize": 29,
+                        "color": [0.78, 0.84, 0.9, 1]
+                    }
+                },
+                {
+                    "name": "step-row",
+                    "style": {
+                        "width": "100%",
+                        "flexDirection": "row",
+                        "gap": 14
+                    },
+                    "styleSheet": {
+                        "Button": {
+                            "height": 110,
+                            "flexGrow": 1,
+                            "flexBasis": 0,
+                            "fontSize": 33
+                        }
+                    },
+                    "children": [
+                        {
+                            "name": "prev-btn",
+                            "type": "Button",
+                            "text": "< Prev"
+                        },
+                        {
+                            "name": "play-btn",
+                            "type": "Button",
+                            "text": "Play",
+                            "toggle": true
+                        },
+                        {
+                            "name": "next-btn",
+                            "type": "Button",
+                            "text": "Next >"
+                        }
+                    ]
+                },
+                {
+                    "name": "ar-btn",
+                    "type": "Button",
+                    "text": "Show in AR",
+                    "toggle": true,
+                    "style": {
+                        "width": "100%",
+                        "height": 110,
+                        "fontSize": 33
+                    }
+                },
+                {
+                    "name": "ar-txt",
+                    "type": "Text",
+                    "text": "",
+                    "style": {
+                        "width": "100%",
+                        "fontSize": 27,
+                        "color": [0.78, 0.84, 0.9, 1]
+                    }
+                },
+                {
+                    "name": "back-btn",
+                    "type": "Button",
+                    "text": "Back to the scans",
+                    "style": {
+                        "width": "100%",
+                        "height": 100,
+                        "fontSize": 31
+                    }
+                }
+            ]
+        }
+    ]
+}

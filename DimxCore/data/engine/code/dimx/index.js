@@ -58,7 +58,7 @@ export {Vec2, Vec3, Vec4, Quat, Mat3, Mat4, Transform, Ray, MathUtils};
 
 if (!globalThis.contentFactory) {
     globalThis.contentFactory = new ContentFactory();
-    dimension.on('Dummy', '', globalThis.contentFactory.createContent.bind(globalThis.contentFactory));
+    dimension.on('Anchor', '', globalThis.contentFactory.createContent.bind(globalThis.contentFactory));
 }
 
 export const content = globalThis.contentFactory;

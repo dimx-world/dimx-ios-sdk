@@ -1,4 +1,5 @@
 {
+    "_comment": "The captures of the AR screen (AppMobileSharePanel, whose shutter is in the bottom bar, mobile-main-screen.json): a column at the right edge of the screen (marginRight 20, where the right panel's buttons stand too, higher up), standing on the bar's top (marginBottom 222 = the bar's 40 + 162 + 20), one thumbnail per photo or video made from the item template - a 158 pt frame around a 150 pt image, the 4 pt of room keeping the image's border, drawn centred on its edge, out of the frame's clip - newest at the bottom, each fading out after ten seconds; a tap on one opens the share sheet with it. The window stays shown and empty between captures. Sizes in UI points: 1000 across the screen.",
     "?_ignore_": [
         { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
         { "condition": "", "value": true }
@@ -8,173 +9,75 @@
     "type": "Window",
     "panel": true,
     "visible": false,
+    "classNames": [ "no-frame" ],
     "style": {
         "marginLeft": "auto",
-        "marginRight": 10,
+        "marginRight": 20,
         "marginTop": "auto",
-        "marginBottom": 500,
+        "marginBottom": 222,
+        "opacity": 1,
+        "padding": 0,
         "flexDirection": "column",
-        "justifyContent": "space-between",
-        "alignItems": "flex-end",
-        "backgroundColor": [0, 0, 0, 0]
-    },
-    "styleSheet": {
-        "Button": {
-            "backgroundColor": [0, 0, 0, 0],
-            "borderStyle": "none",
-            "width": 120,
-            "height": 120
-        }
+        "alignItems": "flex-end"
     },
     "children": [
         {
-            "name": "video-row",
+            "name": "captures",
             "type": "Element",
             "style": {
-                "flexDirection": "row",
-                "justifyContent": "space-between"
+                "flexDirection": "column",
+                "alignItems": "flex-end",
+                "gap": 14
             },
-            "children": [
-                {
-                    "name": "video-preview-container",
+            "custom": {
+                "itemTemplate": {
+                    "name": "",
                     "type": "Element",
                     "style": {
-                        "width": 120,
-                        "height": 120
+                        "width": 158,
+                        "height": 158,
+                        "flexShrink": 0
                     },
                     "children": [
                         {
-                            "name": "take-video-img",
+                            "name": "thumb",
                             "type": "Image",
-                            "visible": false,
                             "style": {
                                 "positionType": "absolute",
-                                "left": 0,
-                                "top": 0,
-                                "width": 120,
-                                "height": 120,
+                                "left": 4,
+                                "top": 4,
+                                "width": 150,
+                                "height": 150,
                                 "objectFit": "cover",
-                                "opacity": 0.5
+                                "borderRadius": 22,
+                                "borderStyle": "solid",
+                                "borderWidth": 4,
+                                "borderColor": [1, 1, 1, 1],
+                                "backgroundColor": [0, 0, 0, 0.4]
                             }
                         },
                         {
-                            "name": "take-video-time-txt",
+                            "name": "thumb-badge",
                             "type": "Text",
-                            "visible": false,
-                            "text": "00:00",
-                            "style": {
-                                "positionType": "absolute",
-                                "left": 12,
-                                "top": 37,
-                                "width": 120,
-                                "height": 40
-                            }
-                        },
-                        {
-                            "name": "share-video-btn",
-                            "type": "Button",
+                            "text": "VIDEO",
                             "visible": false,
                             "style": {
                                 "positionType": "absolute",
-                                "left": 0,
-                                "top": 0,
-
-                                "backgroundImage": "mobile-ui",
-                                "backgroundImageRect": [400, 100, 100, 100]
-                            }
-                        }
-                    ]
-                },
-                {
-                    "name": "video-button-container",
-                    "type": "Element",
-                    "style": {
-                        "width": 120,
-                        "height": 120,
-                        "flexDirection": "column"
-                    },
-                    "children": [
-                        {
-                            "name": "take-video-btn",
-                            "type": "Button",
-                            "classNames": [ "no-frame" ],
-                            "style": {
-                                "backgroundImage": "mobile-ui",
-                                "backgroundImageRect": [300, 100, 100, 100]
-                            }
-                        },
-                        {
-                            "name": "stop-video-btn",
-                            "type": "Button",
-                            "classNames": [ "no-frame" ],
-                            "visible": false,
-                            "style": {
-                                "backgroundImage": "mobile-ui",
-                                "backgroundImageRect": [300, 200, 100, 100]
+                                "left": 14,
+                                "bottom": 14,
+                                "paddingLeft": 10,
+                                "paddingRight": 10,
+                                "paddingTop": 3,
+                                "paddingBottom": 3,
+                                "borderRadius": 10,
+                                "color": [1, 1, 1, 1],
+                                "fontSize": 18,
+                                "backgroundColor": [0, 0, 0, 0.6]
                             }
                         }
                     ]
                 }
-            ]
-        },
-        {
-            "name": "photo-row",
-            "type": "Element",
-            "style": {
-                "width": "100%",
-                "height": 120,
-                "flexDirection": "row",
-                "justifyContent": "space-between"
-            },
-            "children": [
-                {
-                    "name": "photo-preview-container",
-                    "type": "Element",
-                    "style": {
-                        "width": 120,
-                        "height": 120
-                    },
-                    "children": [
-                        {
-                            "name": "share-photo-img",
-                            "type": "Image",
-                            "visible": false,
-                            "style": {
-                                "positionType": "absolute",
-                                "left": 0,
-                                "top": 0,
-                                "width": 120,
-                                "height": 120,
-                                "objectFit": "cover",
-                                "opacity": 0.5
-                            }
-                        },
-                        {
-                            "name": "share-photo-btn",
-                            "type": "Button",
-                            "visible": false,
-                            "style": {
-                                "positionType": "absolute",
-                                "left": 0,
-                                "top": 0,
-                                "backgroundImage": "mobile-ui",
-                                "backgroundImageRect": [400, 100, 100, 100]
-                            }
-                        }
-                    ]
-                },
-                {
-                    "name": "take-photo-btn",
-                    "type": "Button",
-                    "classNames": [ "no-frame" ],
-                    "style": {
-                        "width": 120,
-                        "height": 120,
-                        "backgroundImage": "mobile-ui",
-                        "backgroundImageRect": [200, 100, 100, 100]
-                    }
-                }
-            ]
+            }
         }
     ]
 }

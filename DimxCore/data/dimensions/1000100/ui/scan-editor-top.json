@@ -1,0 +1,135 @@
+{
+    "_comment": "The scan editor's head (EditorScanTopPanel): whether the device is localized in the dimension's map and, when it is not, why - no scans in this tile, or scans here the camera does not match - in the verdict's colour; under it the tile the device stands in and which way it faces, each with its source: the map's while localized, the GPS fix and the compass otherwise (MapTracker::Whereabouts). Hidden until the scan editor opens. Sizes in UI points: 1000 across the screen.",
+    "?_ignore_": [
+        { "condition": {"type": "platform", "value": "Mobile"}, "value": false },
+        { "condition": "", "value": true }
+    ],
+
+    "name": "scan-editor-top",
+    "type": "Window",
+    "panel": true,
+    "visible": false,
+    "classNames": [ "no-frame" ],
+    "style": {
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "marginLeft": 16,
+        "marginRight": 16,
+        "marginTop": 16,
+        "padding": 24,
+        "borderRadius": 24,
+        "backgroundColor": [0, 0, 0, 0.62],
+        "flexDirection": "column",
+        "gap": 10
+    },
+    "children": [
+        {
+            "name": "title-txt",
+            "type": "Text",
+            "text": "Localizing...",
+            "style": {
+                "width": "100%",
+                "fontSize": 46,
+                "color": [1, 0.8, 0.3, 1]
+            }
+        },
+        {
+            "name": "detail-txt",
+            "type": "Text",
+            "text": "",
+            "style": {
+                "width": "100%",
+                "fontSize": 31,
+                "color": [1, 1, 1, 0.92]
+            }
+        },
+        {
+            "name": "where-row",
+            "style": {
+                "width": "100%",
+                "marginTop": 8,
+                "flexDirection": "row",
+                "alignItems": "center",
+                "gap": 20
+            },
+            "children": [
+                {
+                    "name": "where-col",
+                    "style": {
+                        "flexGrow": 1,
+                        "flexShrink": 1,
+                        "flexBasis": 0,
+                        "flexDirection": "column",
+                        "gap": 6
+                    },
+                    "children": [
+                        {
+                            "name": "tile-txt",
+                            "type": "Text",
+                            "text": "Tile",
+                            "style": {
+                                "width": "100%",
+                                "fontSize": 42,
+                                "color": [1, 1, 1, 1]
+                            }
+                        },
+                        {
+                            "name": "tile-src-txt",
+                            "type": "Text",
+                            "text": "",
+                            "style": {
+                                "width": "100%",
+                                "fontSize": 29,
+                                "color": [0.78, 0.84, 0.9, 1]
+                            }
+                        },
+                        {
+                            "name": "heading-txt",
+                            "type": "Text",
+                            "text": "",
+                            "style": {
+                                "width": "100%",
+                                "marginTop": 6,
+                                "fontSize": 42,
+                                "color": [1, 1, 1, 1]
+                            }
+                        },
+                        {
+                            "name": "heading-src-txt",
+                            "type": "Text",
+                            "text": "",
+                            "style": {
+                                "width": "100%",
+                                "fontSize": 29,
+                                "color": [0.78, 0.84, 0.9, 1]
+                            }
+                        },
+                        {
+                            "name": "pos-txt",
+                            "type": "Text",
+                            "text": "",
+                            "style": {
+                                "width": "100%",
+                                "marginTop": 6,
+                                "fontSize": 26,
+                                "color": [0.7, 0.75, 0.8, 1]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "compass",
+                    "type": "Compass",
+                    "style": {
+                        "width": 230,
+                        "height": 230,
+                        "flexShrink": 0,
+                        "fontSize": 40,
+                        "color": [1, 1, 1, 1]
+                    }
+                }
+            ]
+        }
+    ]
+}

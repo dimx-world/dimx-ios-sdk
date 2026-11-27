@@ -33,7 +33,6 @@ uniform mat4 vViewMat;
 uniform mat4 vViewProjMat;
 uniform mat4 vModelMat;
 uniform mat3 vNormalMat;
-uniform mat4 vLightSpaceMat;
 
 #ifdef VA_vTexCoord
 // Affine texture-coordinate transform, applied as uv' = (M * vec3(uv, 1)).xy.
@@ -68,8 +67,6 @@ uniform float vMorphTargetWeights[MAX_MORPH_TARGETS_BLEND];
 
 out vec4 fWorldPosition;
 out vec4 fViewPosition;
-out vec4 fScreenSpacePos;
-out vec4 fLightSpacePos;
 
 mat4 calcModelMatrix()
 {
@@ -125,8 +122,6 @@ void main()
     fWorldPosition = modelMat * vec4(position, 1.0);
     fPosition = vViewProjMat * fWorldPosition;
     fViewPosition = vViewMat * fWorldPosition;
-    fScreenSpacePos = vec4(fPosition.xyz / fPosition.w, 1.0);
-    fLightSpacePos = vLightSpaceMat * fWorldPosition;
 
 #ifdef VA_vNormal
   #if defined(VA_vJointIndex) || defined(VA_vJointIndices4)

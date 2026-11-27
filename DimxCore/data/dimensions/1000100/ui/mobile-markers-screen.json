@@ -4,11 +4,12 @@
         { "condition": "", "value": true }
     ],
 
-    "name": "mobile-anchors-screen",
+    "_comment": "Not modal: New location here asks a name through the app's prompt, a modal, and two modals in the one on-screen ImGui context close each other every frame.",
+    "name": "mobile-markers-screen",
     "type": "Window",
-    "text": "Cloud Anchors",
+    "text": "Markers",
     "visible": false,
-    "modal": true,
+    "modal": false,
     "closeButton": true,
     "scrollable": true,
     "style": {
@@ -23,22 +24,16 @@
     },
     "children": [
         {
-            "name": "create-btn",
+            "name": "new-location-btn",
             "type": "Button",
-            "text": "New Anchor",
-            "classNames": [ "no-frame" ],
+            "text": "New location here",
             "style": {
-                "marginTop": 20,
-                "height": 140,
-                "width": "100%",
-                "backgroundImage": "editor-mobile-ui",
-                "backgroundImageRect": [400, 300, 100, 100],
-                "backgroundPosition": "left",
-                "textAlign": "left"
+                "height": 120,
+                "width": "100%"
             }
         },
         {
-            "name": "anchors-cont",
+            "name": "markers-cont",
             "style": {
                 "width": "100%",
                 "flexDirection": "column",
@@ -60,7 +55,7 @@
                             "style": {
                                 "width": "100%",
                                 "height": 150,
-                                "backgroundImage": "cloud-anchor-thumbnail",
+                                "backgroundImage": "marker-thumbnail",
                                 "backgroundPosition": "left",
                                 "textAlign": "left"
                             }
@@ -68,7 +63,7 @@
                         {
                             "name": "title-txt",
                             "type": "Text",
-                            "text": "Anchor-1234",
+                            "text": "Marker-1234",
                             "style": {
                                 "left": 160,
                                 "top": 0,

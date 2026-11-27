@@ -21,13 +21,21 @@
             "default_generic_service": {
                 "ws_url": "ws://generic-01.dimx.world:8000",
                 "wss_url": "wss://generic-01.dimx.world:8001"
-            }
+            },
+            // The environment the default generic is one of, as a page names its environment
+            // (`gateway_service`): a page handing over another of production's generics leaves
+            // the socket where it is, one on another gateway moves it (Settings::remoteBackend).
+            "default_gateway_service": "https://gateway.dimx.world:5001"
         },
         "cache": {
             "?enabled": [
                 { "condition": {"type": "platform", "value": "Web"}, "value": false },
                 { "condition": "", "value": true }
-            ]
+            ],
+            "max_mb": 1024,
+            // The localization sessions recorded on the device (SessionStore, <cache>/sessions):
+            // kept under this budget until the user sends or discards them, the oldest going first.
+            "sessions_mb": 256
         }
     },
 
@@ -50,7 +58,11 @@
     "device_ar": {
     },
 
-    "cloud_anchors": {
+    "live_view_cover": {
+        "file": "textures/live-view-cover.gif",
+        "background": "0 0 0 1",
+        "size": 0.5,
+        "fade_seconds": 0.25
     },
 
     "device_camera": {
@@ -71,6 +83,15 @@
         "enabled": true
     },
 
+    "//telemetry": "the engine's client for the platform's receiver (telemetry/TelemetryManager.cpp): off unless the app config's telemetry node (the shell's opt-in) or this says enabled; the rates are the client's caps, the endpoint comes from the app config",
+    "telemetry": {
+        "enabled": false,
+        "flush_seconds": 10,
+        "verbose_flush_seconds": 0.25,
+        "logs_per_minute": 60,
+        "verbose_logs_per_minute": 12000
+    },
+
     "multimedia": {
     },
 
@@ -80,9 +101,15 @@
         "front_face_vertex_order": "CounterClockwise",
         "shadows_enabled": true,
         "depth": {
-            "enabled": false,
-            "texture": "depth-map-tex"
-        }
+            "enabled": true
+        },
+        // The debug pass's buffers, in vertices a frame (RenderLines: lines, polygons,
+        // dots). The desktop holds a map's point cloud in the editor's map view; a
+        // phone the cloud of the tiles around it in the scan editor's Show map.
+        "?debug": [
+            { "condition": {"type": "platform", "value": "Desktop"}, "value": {"max_lines": 200000, "max_polygons": 60000, "max_dots": 500000} },
+            { "condition": "", "value": {"max_lines": 20000, "max_polygons": 60000, "max_dots": 50000} }
+        ]
     },
 
     "audio": {
@@ -119,6 +146,9 @@
                 "condition": {"type": "platform", "value": "XR"},
                 "value": 50
             },
+            // The desktop is where a dimension is edited: a venue's floor or a map seen
+            // whole from above is hundreds of metres from the camera.
+            { "condition": {"type": "platform", "value": "Desktop"}, "value": 1000 },
             { "condition": "", "value": 100 }
         ]
     },
@@ -138,19 +168,7 @@
             "skybox": "sky",
             "lighting": {
                 "type": "Directional",
-                "position": "0 3 0",
                 "direction": "0 -1 -0.01",
-
-                "shadow_enabled": false,
-                "shadow_map_size": 512,
-                "shadow_softness": 2.0,
-                "shadow_darkness": 0.7,
-                "shadow_decay_dist": 1.7,
-
-                "volume_width": 3,
-                "volume_height": 3,
-                "volume_near": 0.1,
-                "volume_far": 10,
 
                 "ambient_color": "0.4 0.4 0.4",
                 "diffuse_color": "1 1 1",
