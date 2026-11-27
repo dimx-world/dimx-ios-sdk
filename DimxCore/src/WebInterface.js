@@ -15,6 +15,11 @@ class IOSNativeInterface
     getAppInfo() {
         return window.DIMX_APP_INFO;
     }
+    // What the host app's AppConfig says of the page (JSON text, injected at document start):
+    // whether back from a dimension's front leads to the list of all dimensions.
+    getAppConfig() {
+        return window.DIMX_APP_CONFIG;
+    }
     // The engine's diagnostics policy at document start; changes come through
     // window.DimxInterface.onTelemetryPolicy.
     getTelemetryPolicy() {

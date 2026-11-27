@@ -203,6 +203,12 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         let providersScript = WKUserScript(source: providersContent, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         config.userContentController.addUserScript(providersScript)
 
+        //--- Inject what the host app's AppConfig says of the page (Native.getAppConfig): the
+        // page reads it synchronously, which a message handler cannot answer.
+        let appConfigContent = "window.DIMX_APP_CONFIG = " + WebViewCtrl.jsStringLiteral(Context.inst().appConfig().pageConfigJson())
+        let appConfigScript = WKUserScript(source: appConfigContent, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        config.userContentController.addUserScript(appConfigScript)
+
         //--- Inject WebInterface
         let filepath = Bundle.module.path(forResource: "WebInterface", ofType: "js")!
         var scriptContent = ""

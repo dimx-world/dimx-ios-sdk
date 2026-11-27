@@ -25,6 +25,9 @@ public class AppConfig
     private var mTelemetryApp: String = "ios-sdk"
     private var mParkingEnabled: Bool = false
     private var mVenueTrackingEnabled: Bool = false
+    // Back from a dimension's front to the app's home, the list of all dimensions: there
+    // unless the host app is one dimension alone and turns it off.
+    private var mBackToDimensionListEnabled: Bool = true
 
     public init() {}
 
@@ -133,6 +136,30 @@ public class AppConfig
 
     func venueTrackingEnabled() -> Bool {
         return mVenueTrackingEnabled
+    }
+
+    /// Whether the dimension page's back arrow, at the dimension's front, leaves for the app's
+    /// home - the list of all dimensions. An app that is one dimension alone, opening on its
+    /// page, turns it off: there the front has no arrow, and the app's own back does nothing.
+    /// Further in - a page of the dimension's app, a tab - the arrow still leads back to the
+    /// front, and through the page's history where it has some.
+    public func setBackToDimensionListEnabled(_ value: Bool) {
+        mBackToDimensionListEnabled = value
+    }
+
+    func backToDimensionListEnabled() -> Bool {
+        return mBackToDimensionListEnabled
+    }
+
+    /// What the page acts on of this config, as JSON text: put on the window at document start
+    /// (WebViewCtrl), where WebInterface.js's getAppConfig hands it to the page.
+    func pageConfigJson() -> String {
+        let page: [String: Any] = ["back_to_dimension_list": mBackToDimensionListEnabled]
+        guard let data = try? JSONSerialization.data(withJSONObject: page),
+              let text = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return text
     }
 
     /// The identity the engine reports under: this app's bundle version, the
