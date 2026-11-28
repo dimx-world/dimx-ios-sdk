@@ -4,7 +4,7 @@
 import Foundation
 import PackageDescription
 
-let coreVersion = "0.1.4"
+let coreVersion = "0.1.5-rc1"
 
 // The engine: prebuilt xcframeworks - the ones the dimx-dev workspace builds
 // into Libs/ (`./dev ios`) when that directory exists, the published dxcore
@@ -42,7 +42,7 @@ if useLocalEngine {
 } else {
     print("[DimxWorld] ENGINE: published dxcore \(coreVersion) from dl.dimx.world (no Libs/ directory)")
     engineTargets = [
-        .binaryTarget(name: "dimx-core", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-core.xcframework.zip", checksum: "f12d2168246772673aa84596e76db88976af8e9e4cbdd1a58b19a2dd905f59da"),
+        .binaryTarget(name: "dimx-core", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-core.xcframework.zip", checksum: "b83129623115704a8fbad8a88fdbccb40b2d2d39a7175b5233925378c1c6ff97"),
         .binaryTarget(name: "dimx-net", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-net.xcframework.zip", checksum: "32e5d6354798f2a2aa0cb908b57255626c20d0847f097624dc804dd83a73160f"),
         .binaryTarget(name: "dimx-vision", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dimx-vision.xcframework.zip", checksum: "973cd75daea52873a0939cf388c7faf44629129ae6929887afc052b7cf30271c"),
         .binaryTarget(name: "dxaudio", url: "https://dl.dimx.world/sdk/ios/dxcore/\(coreVersion)/dxaudio.xcframework.zip", checksum: "9a5a7e427468402f6ab0cc9f9d38d0b86c9e04e74e65235aadca032454c479c3"),
