@@ -69,24 +69,6 @@
                     ]
                 },
                 {
-                    "_comment": "What the map search says while nothing is on screen yet (AppMobileMainScreen): loading, looking, localized - hidden while the caption or the recording pill has the slot.",
-                    "name": "map-status",
-                    "type": "Text",
-                    "text": "",
-                    "visible": false,
-                    "style": {
-                        "marginBottom": 10,
-                        "paddingLeft": 18,
-                        "paddingRight": 18,
-                        "paddingTop": 6,
-                        "paddingBottom": 6,
-                        "borderRadius": 20,
-                        "color": [1, 1, 1, 1],
-                        "fontSize": 34,
-                        "backgroundColor": [0, 0, 0, 0.5]
-                    }
-                },
-                {
                     "name": "caption",
                     "type": "Text",
                     "text": "Hold for video",
