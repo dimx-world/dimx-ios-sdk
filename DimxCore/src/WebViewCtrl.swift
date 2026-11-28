@@ -388,6 +388,9 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
         } else if (cmd == "OPEN_SETTINGS") {
             PermissionsManager.openSettings(params["target"] as? String ?? "")
             return
+        } else if (cmd == "OPEN_EXTERNAL_URL") {
+            openExternalUrl(params["url"] as? String ?? "")
+            return
         } else if (cmd == "SAVE_DIMENSION_OFFLINE") {
             Offline_saveDimension(params["dimension"] as? String ?? "")
             return
@@ -767,6 +770,20 @@ class WebViewCtrl: UIViewController, WKUIDelegate, WKScriptMessageHandler, WKNav
             return
         }
         decisionHandler(.grant)
+    }
+
+    /// A link a dimension's app hands out (the page's OPEN_EXTERNAL_URL) - a prize draw's rules, a
+    /// PDF on the files host - opened outside the app, by Safari. The page's window.open never gets
+    /// here: this web view lets a window open only while the tap that asked for it is being handled
+    /// (javaScriptCanOpenWindowsAutomatically left at its default), and the tap was in the
+    /// dimension's frame, the page opening the window a message later. A web address alone.
+    private func openExternalUrl(_ text: String) {
+        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            Logger.warn("WebViewCtrl: OPEN_EXTERNAL_URL refused - not a web address: [\(text)]")
+            return
+        }
+        Logger.info("Opening externally: \(url.absoluteString)")
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
     // WKUIDelegate method - window.open

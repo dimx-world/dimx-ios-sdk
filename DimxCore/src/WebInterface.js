@@ -181,6 +181,13 @@ class IOSNativeInterface
         window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "OPEN_SETTINGS", target: String(target || '')});
     }
 
+    // A link a dimension's app hands out (the page's OPEN_EXTERNAL_URL) - a prize draw's rules, a PDF
+    // on the files host - opened outside the app, by Safari. The page's window.open is refused in this
+    // web view: the tap was in the dimension's frame, and the page opens the window a message later.
+    openExternalUrl(url) {
+        window.webkit.messageHandlers.WebViewCtrl.postMessage({command: "OPEN_EXTERNAL_URL", url: String(url || '')});
+    }
+
     // Synchronous by contract, so it cannot go through a message handler - those are
     // one-way. The list is injected at document start alongside this script and holds the
     // providers the app is actually configured to run; the page uses its own popup for
